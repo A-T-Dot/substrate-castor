@@ -12,12 +12,12 @@ trie-root = '0.12.0'
 [dependencies.basic-authorship]
 git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-basic-authorship'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [dependencies.consensus]
 git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-consensus-aura'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [dependencies.ctrlc]
 features = ['termination']
@@ -26,12 +26,12 @@ version = '3.0'
 [dependencies.inherents]
 git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-inherents'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [dependencies.network]
 git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-network'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [dependencies.substrate-castor-runtime]
 path = 'runtime'
@@ -39,32 +39,32 @@ path = 'runtime'
 [dependencies.primitives]
 git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-primitives'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [dependencies.sr-io]
 git = 'https://github.com/paritytech/substrate.git'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [dependencies.substrate-cli]
 git = 'https://github.com/paritytech/substrate.git'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [dependencies.substrate-client]
 git = 'https://github.com/paritytech/substrate.git'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [dependencies.substrate-executor]
 git = 'https://github.com/paritytech/substrate.git'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [dependencies.substrate-service]
 git = 'https://github.com/paritytech/substrate.git'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [dependencies.transaction-pool]
 git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-transaction-pool'
-rev = 'cc1d67e973fd02c0c997b164ba516cf041bf21f1'
+branch = 'master'
 
 [[bin]]
 name = 'substrate-castor'
