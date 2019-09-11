@@ -15,10 +15,10 @@ fn main() {
 		name: "Substrate Node",
 		commit: env!("VERGEN_SHA_SHORT"),
 		version: env!("CARGO_PKG_VERSION"),
-		executable_name: "substrate-castor",
-		author: "TangBoHao",
-		description: "substrate-castor",
-		support_url: "support.anonymous.an",
+		executable_name: "castor",
+		author: "A.T.Dot",
+		description: "castor",
+		support_url: "support.castor.network",
 	};
 
 	if let Err(e) = cli::run(::std::env::args(), cli::Exit, version) {

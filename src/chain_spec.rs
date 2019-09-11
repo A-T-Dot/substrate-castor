@@ -1,5 +1,5 @@
 use primitives::{Pair, Public};
-use substrate-castor_runtime::{
+use castor_runtime::{
 	AccountId, BabeConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, 
 };

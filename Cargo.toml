@@ -1,9 +1,9 @@
 [package]
-authors = ['TangBoHao']
+authors = ['Tang Bo Hao <tech@btang.cn>']
 build = 'build.rs'
 edition = '2018'
-name = 'substrate-castor'
-version = '2.0.0'
+name = 'castor'
+version = '1.0.0'
 
 [build-dependencies]
 vergen = '3'
@@ -63,7 +63,7 @@ git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-network'
 rev = 'ac6a2a783f0e1f4a814cf2add40275730cd41be1'
 
-[dependencies.substrate-castor-runtime]
+[dependencies.castor-runtime]
 path = 'runtime'
 
 [dependencies.primitives]
@@ -97,7 +97,8 @@ package = 'substrate-transaction-pool'
 rev = 'ac6a2a783f0e1f4a814cf2add40275730cd41be1'
 
 [[bin]]
-name = 'substrate-castor'
+name = 'castor'
 path = 'src/main.rs'
+
 [profile.release]
 panic = 'unwind'

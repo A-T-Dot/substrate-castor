@@ -29,10 +29,12 @@ package = 'substrate-wasm-builder-runner'
 version = '1.0.2'
 
 [package]
-authors = ['TangBoHao']
+authors = ['Tang Bo Hao <tech@btang.cn>']
+build = 'build.rs'
 edition = '2018'
-name = 'substrate-castor-runtime'
-version = '2.0.0'
+name = 'castor-runtime'
+version = '1.0.0'
+
 [dependencies.babe]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
