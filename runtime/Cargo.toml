@@ -30,7 +30,6 @@ version = '1.0.2'
 
 [package]
 authors = ['Tang Bo Hao <tech@btang.cn>']
-build = 'build.rs'
 edition = '2018'
 name = 'castor-runtime'
 version = '1.0.0'

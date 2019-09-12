@@ -1,9 +1,13 @@
 [package]
+name = 'castor'
+version = '1.0.0'
 authors = ['Tang Bo Hao <tech@btang.cn>']
 build = 'build.rs'
 edition = '2018'
+
+[[bin]]
 name = 'castor'
-version = '1.0.0'
+path = 'src/main.rs'
 
 [build-dependencies]
 vergen = '3'
@@ -95,10 +99,6 @@ rev = 'ac6a2a783f0e1f4a814cf2add40275730cd41be1'
 git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-transaction-pool'
 rev = 'ac6a2a783f0e1f4a814cf2add40275730cd41be1'
-
-[[bin]]
-name = 'castor'
-path = 'src/main.rs'
 
 [profile.release]
 panic = 'unwind'
