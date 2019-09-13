@@ -1,4 +1,4 @@
-//! The Substrate Node Template runtime. This can be compiled with `#[no_std]`, ready for Wasm.
+//! The Castor Node runtime. This can be compiled with `#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
@@ -61,9 +61,8 @@ pub type Hash = primitives::H256;
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
 
-/// Used for the module template in `./template.rs`
-mod template;
-mod token;
+/// Used for castor.network modules
+mod currency;
 mod tcx;
 mod ge;
 mod node;
@@ -255,10 +254,7 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-/// Used for the module template in `./template.rs`
-impl template::Trait for Runtime {
-	type Event = Event;
-}
+/// Used for castor.network
 
 type TcxType = u64;
 type ContentHash = [u8; 32];
@@ -298,8 +294,7 @@ construct_runtime!(
 		Indices: indices::{default, Config<T>},
 		Balances: balances::{default, Error},
 		Sudo: sudo,
-		// Used for the module template in `./template.rs`
-		TemplateModule: template::{Module, Call, Storage, Event<T>},
+		// Used for castor.network
 		Tcx: tcx::{Module, Call, Storage, Event<T>},
 		Ge: ge::{Module, Call, Storage, Event<T>},
 		Node: node::{Module, Call, Storage, Event<T>},
