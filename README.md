@@ -2,6 +2,17 @@
 
 A new SRML-based Substrate node, ready for hacking.
 
+### Custom Types
+```
+{
+  "ContentHash": "[u8;32]",
+  "Node": {
+    "id": "ContentHash"
+  }
+}
+```
+
+
 ## Build
 
 Install Rust:
