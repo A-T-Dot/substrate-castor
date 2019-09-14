@@ -262,6 +262,9 @@ impl template::Trait for Runtime {
 
 impl tcx::Trait for Runtime {
 	type Event = Event;
+	type TcxId = u64;
+	type TcxType = u64;
+	type ActionId = u64;
 }
 
 impl ge::Trait for Runtime {

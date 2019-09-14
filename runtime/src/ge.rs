@@ -2,7 +2,9 @@ use support::{decl_module, decl_storage, decl_event, StorageValue, StorageMap, d
 use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd, One };
 use system::ensure_signed;
 use codec::{Encode, Decode};
-use core::convert::{TryInto};
+use rstd::{result, convert::{TryInto}};
+use crate::tcx;
+
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait + balances::Trait {
@@ -15,7 +17,8 @@ pub trait Trait: system::Trait + balances::Trait {
 #[derive(Encode, Decode)]
 pub struct GovernanceEntity {
 		pub threshold: u64,
-    pub totalSupply: u64,
+    // rules
+    // threshold for ge, tcx
 }
 
 // This module's storage items.
@@ -35,6 +38,7 @@ decl_module! {
 
 		fn deposit_event() = default;
     
+    // create ge with rules
     pub fn create(origin) -> Result {
       let who = ensure_signed(origin)?;
       let count = Self::governance_entities_count();
@@ -50,7 +54,6 @@ decl_module! {
 
       let new_governance_entity = GovernanceEntity {
         threshold: 0,
-        totalSupply: 10,
       };
 
       <GovernanceEntities<T>>::insert(new_count, new_governance_entity);
@@ -61,13 +64,23 @@ decl_module! {
       Ok(())
     }
 
-    pub fn stake(origin) -> Result {
+    // stake ge
+    pub fn stake(origin, id: T::GeId, amount: T::Balance) -> Result {
       Ok(())
     }
 
+
     pub fn invest(origin) -> Result {
+      
+      
       Ok(())
     }
+
+    pub fn updateRules(origin) -> Result {
+      Ok(())
+    }
+
+
 	}
 }
 
