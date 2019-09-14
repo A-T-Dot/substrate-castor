@@ -266,6 +266,7 @@ impl tcx::Trait for Runtime {
 
 impl ge::Trait for Runtime {
 	type Event = Event;
+	type GeId = u64;
 }
 
 impl node::Trait for Runtime {
