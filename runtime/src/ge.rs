@@ -38,15 +38,15 @@ decl_module! {
     pub fn create(origin) -> Result {
       let who = ensure_signed(origin)?;
       let count = Self::governance_entities_count();
-
-      // TODO: do something with balance here
-      let balance: u128 = 12;
-      let temp: Option<T::Balance> = balance.try_into().ok();
-      let balance = temp.ok_or("Cannot convert to balance")?;
       
       // get new ge_id
       let one = T::GeId::from(1 as u32);
       let new_count = count.checked_add(&one).ok_or("exceed maximum amount of ge")?;
+
+      // TODO: do something with balance here e.g. lock balance, reduce balance
+      let balance: u128 = 12;
+      let temp: Option<T::Balance> = balance.try_into().ok();
+      let balance = temp.ok_or("Cannot convert to balance")?;
 
       let new_governance_entity = GovernanceEntity {
         threshold: 0,
@@ -54,7 +54,7 @@ decl_module! {
       };
 
       <GovernanceEntities<T>>::insert(new_count, new_governance_entity);
-      
+      <GovernanceEntitiesCount<T>>::put(new_count);
 
       Self::deposit_event(RawEvent::Created(who, new_count, balance));
 
@@ -83,5 +83,5 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-  
+
 }
