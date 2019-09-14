@@ -8,7 +8,7 @@ use crate::tcx;
 
 
 /// The module's configuration trait.
-pub trait Trait: system::Trait + balances::Trait {
+pub trait Trait: system::Trait + balances::Trait + timestamp::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
   type GeId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
@@ -19,8 +19,11 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
 #[derive(Encode, Decode)]
-pub struct GovernanceEntity {
-		pub threshold: u64,
+pub struct GovernanceEntity<Balance, Moment> {
+		threshold: u64,
+    pub min_deposit: Balance,
+    pub apply_stage_len: Moment,
+    pub commit_stage_len: Moment,
     // rules
     // threshold for ge, tcx, time
 }
@@ -29,7 +32,7 @@ pub struct GovernanceEntity {
 decl_storage! {
 	trait Store for Module<T: Trait> as Ge {
 
-    GovernanceEntities get(governance_entity): map T::GeId => Option<GovernanceEntity>;
+    GovernanceEntities get(governance_entity): map T::GeId => Option<GovernanceEntity<BalanceOf<T>, T::Moment>>;
     GovernanceEntitiesCount get(governance_entities_count): T::GeId;
 
     // Stake: which, amount
@@ -63,8 +66,11 @@ decl_module! {
       let temp: Option<BalanceOf<T>> = balance.try_into().ok();
       let balance = temp.ok_or("Cannot convert to balance")?;
 
-      let new_governance_entity = GovernanceEntity {
+      let new_governance_entity = GovernanceEntity::<BalanceOf<T>, T::Moment> {
         threshold: 0,
+        min_deposit: <BalanceOf<T>>::from(3000),
+        apply_stage_len: T::Moment::from(120),
+        commit_stage_len: T::Moment::from(240),
       };
 
       <GovernanceEntities<T>>::insert(new_count, new_governance_entity);

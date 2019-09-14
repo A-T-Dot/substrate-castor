@@ -120,7 +120,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 /// `SLOT_DURATION` instead (like the timestamp module for calculating the
 /// minimum period).
 /// <https://research.web3.foundation/en/latest/polkadot/BABE/Babe/#6-practical-results>
-pub const MILLISECS_PER_BLOCK: u64 = 6000;
+pub const MILLISECS_PER_BLOCK: u64 = 10000;
 
 pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
 
@@ -265,6 +265,7 @@ impl tcx::Trait for Runtime {
 	type TcxId = u64;
 	type TcxType = u64;
 	type ActionId = u64;
+	type ListingId = u64;
 }
 
 impl ge::Trait for Runtime {
