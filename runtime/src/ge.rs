@@ -3,6 +3,7 @@ use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd, One 
 use system::ensure_signed;
 use codec::{Encode, Decode};
 use rstd::{result, convert::{TryInto}};
+use support::traits::{WithdrawReasons, LockableCurrency, Currency};
 use crate::tcx;
 
 
@@ -11,14 +12,17 @@ pub trait Trait: system::Trait + balances::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
   type GeId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
+  type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 }
+
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
 #[derive(Encode, Decode)]
 pub struct GovernanceEntity {
 		pub threshold: u64,
     // rules
-    // threshold for ge, tcx
+    // threshold for ge, tcx, time
 }
 
 // This module's storage items.
@@ -28,6 +32,13 @@ decl_storage! {
     GovernanceEntities get(governance_entity): map T::GeId => Option<GovernanceEntity>;
     GovernanceEntitiesCount get(governance_entities_count): T::GeId;
 
+    // Stake: which, amount
+    StakedAmount get(staked_amount): map (T::GeId, T::AccountId) => BalanceOf<T>;
+    TotalStakedAmount get(total_staked_amount): map T::GeId => BalanceOf<T>;
+
+    // Invest
+    InvestedAmount get(invested_amount): map (T::GeId, T::AccountId) => BalanceOf<T>;
+    TotalInvestedAmount get(total_invested_amount): map T::GeId => BalanceOf<T>;
 	}
 }
 
@@ -49,7 +60,7 @@ decl_module! {
 
       // TODO: do something with balance here e.g. lock balance, reduce balance
       let balance: u128 = 12;
-      let temp: Option<T::Balance> = balance.try_into().ok();
+      let temp: Option<BalanceOf<T>> = balance.try_into().ok();
       let balance = temp.ok_or("Cannot convert to balance")?;
 
       let new_governance_entity = GovernanceEntity {
@@ -65,7 +76,24 @@ decl_module! {
     }
 
     // stake ge
-    pub fn stake(origin, id: T::GeId, amount: T::Balance) -> Result {
+    pub fn stake(origin, id: T::GeId, amount: BalanceOf<T>) -> Result {
+      let who = ensure_signed(origin)?;
+      ensure!(<GovernanceEntities<T>>::exists(id), "GE does not exist");
+      // TODO: actually stake real balance, below simulates
+      const STAKING_ID: [u8; 8] = *b"staking ";
+      T::Currency::set_lock(
+        STAKING_ID,
+        &who,
+        amount,
+        T::BlockNumber::max_value(),
+        WithdrawReasons::all(),
+      );
+      
+      Ok(())
+    }
+
+    pub fn withdraw(origin, id: T::GeId, amount: BalanceOf<T>) -> Result {
+      // TODO: withdraw balance
       Ok(())
     }
 
@@ -89,7 +117,7 @@ decl_event!(
   where 
     AccountId = <T as system::Trait>::AccountId,
     <T as Trait>::GeId,
-    <T as balances::Trait>::Balance,
+    Balance = BalanceOf<T>,
   {
 		Created(AccountId, GeId, Balance),
 	}

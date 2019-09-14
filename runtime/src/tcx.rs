@@ -6,7 +6,7 @@ use rstd::result;
 use crate::ge;
 
 /// The module's configuration trait.
-pub trait Trait: system::Trait + ge::Trait {
+pub trait Trait: system::Trait + ge::Trait + timestamp::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 	type TcxId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
