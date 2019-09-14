@@ -79,27 +79,64 @@ decl_module! {
     pub fn stake(origin, id: T::GeId, amount: BalanceOf<T>) -> Result {
       let who = ensure_signed(origin)?;
       ensure!(<GovernanceEntities<T>>::exists(id), "GE does not exist");
-      // TODO: actually stake real balance, below simulates
-      const STAKING_ID: [u8; 8] = *b"staking ";
-      T::Currency::set_lock(
-        STAKING_ID,
-        &who,
-        amount,
-        T::BlockNumber::max_value(),
-        WithdrawReasons::all(),
-      );
       
+      // TODO: actually stake real balance, below simulates
+      // const STAKING_ID: [u8; 8] = *b"staking ";
+      // T::Currency::set_lock(
+      //   STAKING_ID,
+      //   &who,
+      //   amount,
+      //   T::BlockNumber::max_value(),
+      //   WithdrawReasons::all(),
+      // );
+      // check if enough balance
+
+      // check if overflow
+      let staked_amount = Self::staked_amount((id, who.clone()));
+      let total_staked_amount = Self::total_staked_amount(id);
+      let new_staked_amount = staked_amount.checked_add(&amount).ok_or("Overflow stake amount")?;
+      let new_total_staked_amount = total_staked_amount.checked_add(&amount).ok_or("Overflow total stake amount")?;
+
+      <StakedAmount<T>>::insert((id, who.clone()), new_staked_amount);
+      <TotalStakedAmount<T>>::insert(id, new_total_staked_amount);
+
+
+      Self::deposit_event(RawEvent::Staked(who, id, amount));
+
       Ok(())
     }
 
     pub fn withdraw(origin, id: T::GeId, amount: BalanceOf<T>) -> Result {
       // TODO: withdraw balance
+      let who = ensure_signed(origin)?;
+      ensure!(<GovernanceEntities<T>>::exists(id), "GE does not exist");
+      // TODO: actually stake real balance, below simulates
+      // const STAKING_ID: [u8; 8] = *b"staking ";
+      // T::Currency::remove_lock(
+      //   STAKING_ID,
+      //   &who,
+      // );
+
       Ok(())
     }
 
 
-    pub fn invest(origin) -> Result {
-      
+    pub fn invest(origin, id: T::GeId, amount: BalanceOf<T>) -> Result {
+      let who = ensure_signed(origin)?;
+      ensure!(<GovernanceEntities<T>>::exists(id), "GE does not exist");
+      // TODO: invest, check if enough balance
+
+      // check if overflow
+      let invested_amount = Self::invested_amount((id, who.clone()));
+      let total_invested_amount = Self::total_invested_amount(id);
+      let new_invested_amount = invested_amount.checked_add(&amount).ok_or("Overflow stake amount")?;
+      let new_total_invested_amount = total_invested_amount.checked_add(&amount).ok_or("Overflow total stake amount")?;
+
+      <InvestedAmount<T>>::insert((id, who.clone()), new_invested_amount);
+      <TotalInvestedAmount<T>>::insert(id, new_total_invested_amount);
+
+      <InvestedAmount<T>>::insert((id, who.clone()), amount);
+      Self::deposit_event(RawEvent::Invested(who, id, amount));
       
       Ok(())
     }
@@ -120,6 +157,8 @@ decl_event!(
     Balance = BalanceOf<T>,
   {
 		Created(AccountId, GeId, Balance),
+    Staked(AccountId, GeId, Balance),
+    Invested(AccountId,GeId, Balance),
 	}
 );
 
@@ -209,15 +248,12 @@ mod tests {
 	}
 
 	#[test]
-	fn it_works_for_default_value() {
+	fn it_creates_ge_correctly() {
 		with_externalities(&mut new_test_ext(), || {
-			// Just a dummy test for the dummy funtion `do_something`
-			// calling the `do_something` function with a value 42
-			// assert_ok!(TemplateModule::do_something(Origin::signed(1), 42));
-			// // asserting that the stored value is equal to what we stored
-			// assert_eq!(TemplateModule::something(), Some(42));
+
       assert_ok!(Tcx::create(Origin::signed(1)));
       assert_eq!(Tcx::governance_entities_count(), 1);
+      assert_ok!(Tcx::stake(Origin::signed(1), 1, 100000000));
 		});
 	}
 }
