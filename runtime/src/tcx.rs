@@ -142,7 +142,7 @@ decl_module! {
 			Ok(())
 		}
 
-		// TODO: node_id or listing_id?
+		// TODO: node_id or listing_id; prevent multiple challenge
     pub fn challenge(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: BalanceOf<T>) -> Result {
 			let who = ensure_signed(origin)?;
 
@@ -155,7 +155,7 @@ decl_module! {
 			
 			// check if challengable
 			ensure!(listing.challenge_id == T::ChallengeId::from(0), "Listing is already challenged.");
-			// owner - ensure!(listing.owner != sender, "You cannot challenge your own listing.");
+			// TODO: owner - ensure!(listing.owner != sender, "You cannot challenge your own listing.");
 			ensure!(amount >= listing.amount, "Amount not enough to challenge");
 
 			let now = <timestamp::Module<T>>::get();
@@ -181,7 +181,7 @@ decl_module! {
 			};
 
 			// check enough balance, lock it
-			// <token::Module<T>>::lock(sender.clone(), deposit, listing_hash)?;
+			// TODO: <token::Module<T>>::lock(sender.clone(), deposit, listing_hash)?;
 
 
 			let challenge_nonce = <ChallengeNonce<T>>::get();
@@ -203,6 +203,7 @@ decl_module! {
 			Ok(())
 		}
 
+		// TODO: prevent double votes
     pub fn vote(origin, challenge_id: T::ChallengeId, amount: BalanceOf<T>, value: bool) -> Result {
 			let who = ensure_signed(origin)?;
 
@@ -216,7 +217,7 @@ decl_module! {
 			ensure!(challenge.voting_ends > now, "Commit stage length has passed.");
 
 			// deduct the deposit for vote
-			// <token::Module<T>>::lock(sender.clone(), deposit, challenge.listing_hash)?;
+			// TODO: <token::Module<T>>::lock(sender.clone(), deposit, challenge.listing_hash)?;
 
 			let mut poll_instance = Self::polls(challenge_id);
 			// based on vote value, increase the count of votes (for or against)
@@ -244,76 +245,72 @@ decl_module! {
     pub fn resolve(origin, tcx_id: T::TcxId, node_id: T::ContentHash) -> Result {
 			ensure!(<TcxListings<T>>::exists((tcx_id,node_id)), "Listing not found");
 
-			// let listing_hash = Self::index_hash(listing_id);
-			// let listing = Self::listings(listing_hash);
+			let listing = Self::listing_of_tcr_by_node_id((tcx_id,node_id));
 
-			// let now = <timestamp::Module<T>>::get();
-			// let challenge;
-			// let poll;
+			let now = <timestamp::Module<T>>::get();
 
-			// // check if listing is challenged
-			// if listing.challenge_id > 0 {
-			// 	// challenge
-			// 	challenge = Self::challenges(listing.challenge_id);
-			// 	poll = Self::polls(listing.challenge_id);
+			// check if listing was challenged
+			if listing.challenge_id == T::ChallengeId::from(0) {
+				// no challenge
+				// check if apply stage length has passed
+				ensure!(listing.application_expiry < now, "Apply stage length has not passed.");
 
-			// 	// check commit stage length has passed
-			// 	ensure!(challenge.voting_ends < now, "Commit stage length has not passed.");
-			// } else {
-			// 	// no challenge
-			// 	// check if apply stage length has passed
-			// 	ensure!(listing.application_expiry < now, "Apply stage length has not passed.");
+				// update listing status
+				<TcxListings<T>>::mutate((tcx_id, node_id), |listing| {
+					listing.whitelisted = true;
+				});
 
-			// 	// update listing status
-			// 	<Listings<T>>::mutate(listing_hash, |listing|
-			// 	{
-			// 		listing.whitelisted = true;
-			// 	});
+				Self::deposit_event(RawEvent::Accepted(tcx_id, node_id));
+				return Ok(());
+			} 
 
-			// 	Self::deposit_event(RawEvent::Accepted(listing_hash));
-			// 	return Ok(());
-			// }
+			// listing was challenged
+			let	challenge = Self::challenges(listing.challenge_id);
+			let	poll = Self::polls(listing.challenge_id);
+			
+			// check commit stage length has passed
+			ensure!(challenge.voting_ends < now, "Commit stage length has not passed.");
+		
+			let mut whitelisted = false;
 
-			// let mut whitelisted = false;
+			// update the poll instance
+			<Polls<T>>::mutate(listing.challenge_id, |poll| {
+				if poll.votes_for >= poll.votes_against {
+						poll.passed = true;
+						whitelisted = true;
+				} else {
+						poll.passed = false;
+				}
+			});
 
-			// // mutate polls collection to update the poll instance
-			// <Polls<T>>::mutate(listing.challenge_id, |poll| {
-			// 	if poll.votes_for >= poll.votes_against {
-			// 			poll.passed = true;
-			// 			whitelisted = true;
-			// 	} else {
-			// 			poll.passed = false;
-			// 	}
-			// });
+			// update listing status
+			<TcxListings<T>>::mutate((tcx_id, node_id), |listing| {
+				listing.whitelisted = whitelisted;
+				listing.challenge_id = T::ChallengeId::from(0);
+			});
 
-			// // update listing status
-			// <Listings<T>>::mutate(listing_hash, |listing| {
-			// 	listing.whitelisted = whitelisted;
-			// 	listing.challenge_id = 0;
-			// });
+			// update challenge
+			<Challenges<T>>::mutate(listing.challenge_id, |challenge| {
+				challenge.resolved = true;
+				if whitelisted == true {
+					challenge.total_tokens = poll.votes_for;
+					challenge.reward_pool = challenge.amount + poll.votes_against;
+				} else {
+					challenge.total_tokens = poll.votes_against;
+					challenge.reward_pool = listing.amount + poll.votes_for;
+				}
+			});
 
-			// // update challenge
-			// <Challenges<T>>::mutate(listing.challenge_id, |challenge| {
-			// 	challenge.resolved = true;
-			// 	if whitelisted == true {
-			// 		challenge.total_tokens = poll.votes_for;
-			// 		challenge.reward_pool = challenge.deposit + poll.votes_against;
-			// 	} else {
-			// 		challenge.total_tokens = poll.votes_against;
-			// 		challenge.reward_pool = listing.deposit + poll.votes_for;
-			// 	}
-			// });
+			// raise appropriate event as per whitelisting status
+			if whitelisted == true {
+				Self::deposit_event(RawEvent::Accepted(tcx_id, node_id));
+			} else {
+				// if rejected, give challenge deposit back to the challenger
+				// TODO: <token::Module<T>>::unlock(challenge.owner, challenge.deposit, listing_hash)?;
+				Self::deposit_event(RawEvent::Rejected(tcx_id, node_id));
+			}
 
-			// // raise appropriate event as per whitelisting status
-			// if whitelisted == true {
-			// 	Self::deposit_event(RawEvent::Accepted(listing_hash));
-			// } else {
-			// 	// if rejected, give challenge deposit back to the challenger
-			// 	<token::Module<T>>::unlock(challenge.owner, challenge.deposit, listing_hash)?;
-			// 	Self::deposit_event(RawEvent::Rejected(listing_hash));
-			// }
-
-			// Self::deposit_event(RawEvent::Resolved(listing_hash, listing.challenge_id));
+			Self::deposit_event(RawEvent::Resolved(listing.challenge_id));
 			Ok(())
 		}
 
@@ -365,9 +362,9 @@ decl_event!(
 		Proposed(AccountId, TcxId, ContentHash, Balance, ActionId),
 		Challenged(AccountId, TcxId, ContentHash, Balance),
 		Voted(AccountId, ChallengeId, Balance, Value),
-		Resolved(ContentHash, u32),
-		Accepted(ContentHash),
-		Rejected(ContentHash),
+		Resolved(ChallengeId),
+		Accepted(TcxId, ContentHash),
+		Rejected(TcxId, ContentHash),
 		Claimed(AccountId, u32),
 	}
 );
