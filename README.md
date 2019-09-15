@@ -22,9 +22,12 @@ A new SRML-based Substrate node, ready for hacking.
 ### Custom Types
 ```
 {
-  "ContentHash": "[u8;32]",
+  "ContentHash": "[u8; 32]",
+  "NodeType": "u32",
   "Node": {
-    "id": "ContentHash"
+    "id": "ContentHash",
+    "node_type": "NodeType",
+    "sources": "Vec<ContentHash>"
   },
   "GeId": "u64",
   "ActionId": "u64",
@@ -62,7 +65,11 @@ A new SRML-based Substrate node, ready for hacking.
   "Tcx": {
     "tcx_type": "u64"
   },
-  "TcxType": "u64"
+  "TcxType": "u64",
+  "Link": {
+    "source": "u32",
+    "target": "u32"
+  }
 }
 ```
 
