@@ -2,6 +2,69 @@
 
 A new SRML-based Substrate node, ready for hacking.
 
+## TODO
+---
+### anakornk
+- [x] Node Creation and Ownership Transfer
+- [x] Simulate GE creation, stake and invest
+- [x] Multi-TCX per GE, Simulates TCX 5 steps
+- [ ] Compute Voting Power
+- [ ] Link with GE
+- [ ] Add sourcing features for nodes
+
+#### optional
+- [ ] GE Withdraw
+- [ ] add security/conditional checks (esp. TCX)
+---
+
+### Custom Types
+```
+{
+  "ContentHash": "[u8;32]",
+  "Node": {
+    "id": "ContentHash"
+  },
+  "GeId": "u64",
+  "ActionId": "u64",
+  "TcxId": "u64",
+  "GovernanceEntity": {
+    "threshold": "u64",
+    "min_deposit": "Balance",
+    "apply_stage_len": "Moment",
+    "commit_stage_len": "Moment"
+  },
+  "Challenge": {
+    "amount": "Balance",
+    "voting_ends": "Moment",
+    "resolved": "bool",
+    "reward_pool": "Balance",
+    "total_tokens": "Balance",
+    "owner": "AccountId"
+  },
+  "ChallengeId": "u64",
+  "Listing": {
+    "id": "ListingId",
+    "node_id": "ContentHash",
+    "amount": "Balance",
+    "application_expiry": "Moment",
+    "whitelisted": "bool",
+    "challenge_id": "ChallengeId",
+    "owner": "AccountId"
+  },
+  "ListingId": "u64",
+  "Poll": {
+    "votes_for": "Balance",
+    "votes_against": "Balance",
+    "passed": "bool"
+  },
+  "Tcx": {
+    "tcx_type": "u64"
+  },
+  "TcxType": "u64"
+}
+```
+
+
 ## Build
 
 Install Rust:
