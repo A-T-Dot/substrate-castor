@@ -155,7 +155,7 @@ decl_module! {
 			
 			// check if challengable
 			ensure!(listing.challenge_id == T::ChallengeId::from(0), "Listing is already challenged.");
-			ensure!(listing.owner != sender, "You cannot challenge your own listing.");
+			ensure!(listing.owner != who.clone(), "You cannot challenge your own listing.");
 			ensure!(amount >= listing.amount, "Amount not enough to challenge");
 
 			let now = <timestamp::Module<T>>::get();
@@ -317,18 +317,16 @@ decl_module! {
     pub fn claim(origin, challenge_id: T::ChallengeId) -> Result {
 			let who = ensure_signed(origin)?;
 
-			// ensure challenge exists and has been resolved
 			ensure!(<Challenges<T>>::exists(challenge_id), "Challenge not found.");
-			// let challenge = Self::challenges(challenge_id);
-			// ensure!(challenge.resolved == true, "Challenge is not resolved.");
+			let challenge = Self::challenges(challenge_id);
+			ensure!(challenge.resolved == true, "Challenge is not resolved.");
 
-			// // get the poll and vote instances
-			// // reward depends on poll passed status and vote value
-			// let poll = Self::polls(challenge_id);
-			// let vote = Self::votes((challenge_id, sender.clone()));
+			// reward depends on poll passed status and vote value
+			let poll = Self::polls(challenge_id);
+			let vote = Self::votes((challenge_id, sender.clone()));
 
-			// // ensure vote reward is not already claimed
-			// ensure!(vote.claimed == false, "Vote reward has already been claimed.");
+			// ensure vote reward is not already claimed
+			ensure!(vote.claimed == false, "Vote reward has already been claimed.");
 
 			// // if winning party, calculate reward and transfer
 			// if poll.passed == vote.value {
