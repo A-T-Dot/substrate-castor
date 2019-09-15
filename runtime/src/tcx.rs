@@ -155,7 +155,7 @@ decl_module! {
 			
 			// check if challengable
 			ensure!(listing.challenge_id == T::ChallengeId::from(0), "Listing is already challenged.");
-			// TODO: owner - ensure!(listing.owner != sender, "You cannot challenge your own listing.");
+			ensure!(listing.owner != sender, "You cannot challenge your own listing.");
 			ensure!(amount >= listing.amount, "Amount not enough to challenge");
 
 			let now = <timestamp::Module<T>>::get();
@@ -203,7 +203,7 @@ decl_module! {
 			Ok(())
 		}
 
-		// TODO: prevent double votes
+		// TODO: prevent double votes, cannot vote on your own challenge?
     pub fn vote(origin, challenge_id: T::ChallengeId, amount: BalanceOf<T>, value: bool) -> Result {
 			let who = ensure_signed(origin)?;
 
