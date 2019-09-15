@@ -260,13 +260,16 @@ impl template::Trait for Runtime {
 	type Event = Event;
 }
 
+type TcxType = u64;
+
 impl tcx::Trait for Runtime {
 	type Event = Event;
 	type TcxId = u64;
-	type TcxType = u64;
+	type TcxType = TcxType;
 	type ActionId = u64;
 	type ListingId = u64;
 	type ChallengeId = u64;
+	type Currency = Balances;
 }
 
 impl ge::Trait for Runtime {

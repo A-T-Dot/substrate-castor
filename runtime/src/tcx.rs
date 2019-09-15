@@ -5,11 +5,11 @@ use codec::{Encode, Decode};
 use rstd::result;
 use crate::ge;
 use crate::node;
-use support::traits::{Currency};
+use support::traits::{Currency, LockableCurrency};
 
 
 /// The module's configuration trait.
-pub trait Trait: system::Trait + ge::Trait + timestamp::Trait + node::Trait {
+pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + node::Trait + ge::Trait  {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 	type TcxId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
@@ -17,6 +17,7 @@ pub trait Trait: system::Trait + ge::Trait + timestamp::Trait + node::Trait {
 	type ActionId: Parameter + Member + Default + Copy;
 	type ListingId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
 	type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
+  type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 }
 
 type BalanceOf<T> = <<T as ge::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -355,12 +356,11 @@ decl_event!(
 		TcxId = <T as Trait>::TcxId,
 		ActionId = <T as Trait>::ActionId,
 		Balance = <<T as ge::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance,
-		Value = bool,
 		ChallengeId = <T as Trait>::ChallengeId,
 	{
 		Proposed(AccountId, TcxId, ContentHash, Balance, ActionId),
 		Challenged(AccountId, TcxId, ContentHash, Balance),
-		Voted(AccountId, ChallengeId, Balance, Value),
+		Voted(AccountId, ChallengeId, Balance, bool),
 		Resolved(ChallengeId),
 		Accepted(TcxId, ContentHash),
 		Rejected(TcxId, ContentHash),

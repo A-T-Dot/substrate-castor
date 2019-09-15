@@ -8,6 +8,39 @@ A new SRML-based Substrate node, ready for hacking.
   "ContentHash": "[u8;32]",
   "Node": {
     "id": "ContentHash"
+  },
+  "GeId": "u64",
+  "ActionId": "u64",
+  "TcxId": "u64",
+  "GovernanceEntity": {
+    "threshold": "u64"
+  },
+  "Challenge": {
+    "amount": "Balance",
+    "voting_ends": "Moment",
+    "resolved": "bool",
+    "reward_pool": "Balance",
+    "total_tokens": "Balance",
+    "owner": "AccountId"
+  },
+  "ChallengeId": "u64",
+  "Listing": {
+    "id": "ListingId",
+    "node_id": "ContentHash",
+    "amount": "Balance",
+    "application_expiry": "Moment",
+    "whitelisted": "bool",
+    "challenge_id": "ChallengeId",
+    "owner": "AccountId"
+  },
+  "ListingId": "u64",
+  "Poll": {
+    "votes_for": "Balance",
+    "votes_against": "Balance",
+    "passed": "bool"
+  },
+  "Tcx": {
+    "tcx_type": "u64"
   }
 }
 ```

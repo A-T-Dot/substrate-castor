@@ -151,6 +151,14 @@ decl_module! {
       Ok(())
     }
 
+    // for testing purposes only; in real scenario, a proposal has to be made to GE
+    pub fn createTcx(origin) -> Result {
+      let who = ensure_signed(origin)?;
+      // let tcxId = tcx::Module<T>::create(ge_id, tcx_type)?;
+
+      Ok(())
+    }
+
 
 	}
 }
