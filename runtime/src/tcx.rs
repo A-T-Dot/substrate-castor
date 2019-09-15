@@ -203,48 +203,46 @@ decl_module! {
 			Ok(())
 		}
 
-    pub fn vote(origin) -> Result {
+    pub fn vote(origin, challenge_id: T::ChallengeId, amount: BalanceOf<T>, value: bool) -> Result {
 			let who = ensure_signed(origin)?;
 
 			// check if listing is challenged
-			// ensure!(<Challenges<T>>::exists(challenge_id), "Challenge does not exist.");
-			// let challenge = Self::challenges(challenge_id);
-			// ensure!(challenge.resolved == false, "Challenge is already resolved.");
+			ensure!(<Challenges<T>>::exists(challenge_id), "Challenge does not exist.");
+			let challenge = Self::challenges(challenge_id);
+			ensure!(challenge.resolved == false, "Challenge is already resolved.");
 
-			// // check commit stage length not passed
-			// let now = <timestamp::Module<T>>::get();
-			// ensure!(challenge.voting_ends > now, "Commit stage length has passed.");
+			// check commit stage length not passed
+			let now = <timestamp::Module<T>>::get();
+			ensure!(challenge.voting_ends > now, "Commit stage length has passed.");
 
-			// // deduct the deposit for vote
+			// deduct the deposit for vote
 			// <token::Module<T>>::lock(sender.clone(), deposit, challenge.listing_hash)?;
 
-			// let mut poll_instance = Self::polls(challenge_id);
-			// // based on vote value, increase the count of votes (for or against)
-			// match value {
-			// 	true => poll_instance.votes_for += deposit,
-			// 	false => poll_instance.votes_against += deposit,
-			// }
+			let mut poll_instance = Self::polls(challenge_id);
+			// based on vote value, increase the count of votes (for or against)
+			match value {
+				true => poll_instance.votes_for += amount,
+				false => poll_instance.votes_against += amount,
+			}
 
-			// // create a new vote instance with the input params
-			// let vote_instance = Vote {
-			// 	value,
-			// 	deposit,
-			// 	claimed: false,
-			// };
+			// create a new vote instance with the input params
+			let vote_instance = Vote {
+				value,
+				amount,
+				claimed: false,
+			};
 
-			// // mutate polls collection to update the poll instance
-			// <Polls<T>>::mutate(challenge_id, |poll| *poll = poll_instance);
+			// mutate polls collection to update the poll instance
+			<Polls<T>>::mutate(challenge_id, |poll| *poll = poll_instance);
 
-			// // insert new vote into votes collection
-			// <Votes<T>>::insert((challenge_id, sender.clone()), vote_instance);
+			<Votes<T>>::insert((challenge_id, who.clone()), vote_instance);
 
-			// // raise the event
-			// Self::deposit_event(RawEvent::Voted(sender, challenge_id, deposit));
+			Self::deposit_event(RawEvent::Voted(who, challenge_id, amount, value));
 			Ok(())
 		}
 
-    pub fn resolve(origin) -> Result {
-			// ensure!(<ListingIndexHash<T>>::exists(listing_id), "Listing not found.");
+    pub fn resolve(origin, tcx_id: T::TcxId, node_id: T::ContentHash) -> Result {
+			ensure!(<TcxListings<T>>::exists((tcx_id,node_id)), "Listing not found");
 
 			// let listing_hash = Self::index_hash(listing_id);
 			// let listing = Self::listings(listing_hash);
@@ -361,10 +359,12 @@ decl_event!(
 		TcxId = <T as Trait>::TcxId,
 		ActionId = <T as Trait>::ActionId,
 		Balance = <<T as ge::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance,
+		Value = bool,
+		ChallengeId = <T as Trait>::ChallengeId,
 	{
 		Proposed(AccountId, TcxId, ContentHash, Balance, ActionId),
 		Challenged(AccountId, TcxId, ContentHash, Balance),
-		Voted(AccountId, u32, Balance),
+		Voted(AccountId, ChallengeId, Balance, Value),
 		Resolved(ContentHash, u32),
 		Accepted(ContentHash),
 		Rejected(ContentHash),
