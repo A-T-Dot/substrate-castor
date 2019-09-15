@@ -2,6 +2,21 @@
 
 A new SRML-based Substrate node, ready for hacking.
 
+## TODO
+---
+### anakornk
+- [x] Node Creation and Ownership Transfer
+- [x] Simulate GE creation, stake and invest
+- [x] Multi-TCX per GE, Simulates TCX 5 steps
+- [] Compute Voting Power
+- [] Link with GE
+- [] Add sourcing features for nodes
+
+#### optional
+- [ ] GE Withdraw
+- [ ] add security/conditional checks (esp. TCX)
+---
+
 ### Custom Types
 ```
 {
@@ -13,7 +28,10 @@ A new SRML-based Substrate node, ready for hacking.
   "ActionId": "u64",
   "TcxId": "u64",
   "GovernanceEntity": {
-    "threshold": "u64"
+    "threshold": "u64",
+    "min_deposit": "Balance",
+    "apply_stage_len": "Moment",
+    "commit_stage_len": "Moment"
   },
   "Challenge": {
     "amount": "Balance",
@@ -41,7 +59,8 @@ A new SRML-based Substrate node, ready for hacking.
   },
   "Tcx": {
     "tcx_type": "u64"
-  }
+  },
+  "TcxType": "u64"
 }
 ```
 

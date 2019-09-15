@@ -12,10 +12,8 @@ pub trait Trait: system::Trait + balances::Trait + timestamp::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
   type GeId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
-  type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
 #[derive(Encode, Decode)]
@@ -32,16 +30,16 @@ pub struct GovernanceEntity<Balance, Moment> {
 decl_storage! {
 	trait Store for Module<T: Trait> as Ge {
 
-    GovernanceEntities get(governance_entity): map T::GeId => Option<GovernanceEntity<BalanceOf<T>, T::Moment>>;
+    GovernanceEntities get(governance_entity): map T::GeId => Option<GovernanceEntity<T::Balance, T::Moment>>;
     GovernanceEntitiesCount get(governance_entities_count): T::GeId;
 
     // Stake: which, amount
-    StakedAmount get(staked_amount): map (T::GeId, T::AccountId) => BalanceOf<T>;
-    TotalStakedAmount get(total_staked_amount): map T::GeId => BalanceOf<T>;
+    StakedAmount get(staked_amount): map (T::GeId, T::AccountId) => T::Balance;
+    TotalStakedAmount get(total_staked_amount): map T::GeId => T::Balance;
 
     // Invest
-    InvestedAmount get(invested_amount): map (T::GeId, T::AccountId) => BalanceOf<T>;
-    TotalInvestedAmount get(total_invested_amount): map T::GeId => BalanceOf<T>;
+    InvestedAmount get(invested_amount): map (T::GeId, T::AccountId) => T::Balance;
+    TotalInvestedAmount get(total_invested_amount): map T::GeId => T::Balance;
 	}
 }
 
@@ -63,14 +61,14 @@ decl_module! {
 
       // TODO: do something with balance here e.g. lock balance, reduce balance
       let balance: u128 = 12;
-      let temp: Option<BalanceOf<T>> = balance.try_into().ok();
+      let temp: Option<T::Balance> = balance.try_into().ok();
       let balance = temp.ok_or("Cannot convert to balance")?;
 
-      let new_governance_entity = GovernanceEntity::<BalanceOf<T>, T::Moment> {
+      let new_governance_entity = GovernanceEntity::<T::Balance, T::Moment> {
         threshold: 0,
-        min_deposit: <BalanceOf<T>>::from(3000),
-        apply_stage_len: T::Moment::from(120),
-        commit_stage_len: T::Moment::from(240),
+        min_deposit: <T::Balance>::from(3000),
+        apply_stage_len: T::Moment::from(60000),
+        commit_stage_len: T::Moment::from(60000),
       };
 
       <GovernanceEntities<T>>::insert(new_count, new_governance_entity);
@@ -82,7 +80,7 @@ decl_module! {
     }
 
     // stake ge
-    pub fn stake(origin, id: T::GeId, amount: BalanceOf<T>) -> Result {
+    pub fn stake(origin, id: T::GeId, amount: T::Balance) -> Result {
       let who = ensure_signed(origin)?;
       ensure!(<GovernanceEntities<T>>::exists(id), "GE does not exist");
       
@@ -112,7 +110,7 @@ decl_module! {
       Ok(())
     }
 
-    pub fn withdraw(origin, id: T::GeId, amount: BalanceOf<T>) -> Result {
+    pub fn withdraw(origin, id: T::GeId, amount: T::Balance) -> Result {
       // TODO: withdraw balance
       let who = ensure_signed(origin)?;
       ensure!(<GovernanceEntities<T>>::exists(id), "GE does not exist");
@@ -127,7 +125,7 @@ decl_module! {
     }
 
 
-    pub fn invest(origin, id: T::GeId, amount: BalanceOf<T>) -> Result {
+    pub fn invest(origin, id: T::GeId, amount: T::Balance) -> Result {
       let who = ensure_signed(origin)?;
       ensure!(<GovernanceEntities<T>>::exists(id), "GE does not exist");
       // TODO: invest, check if enough balance
@@ -147,18 +145,9 @@ decl_module! {
       Ok(())
     }
 
-    pub fn updateRules(origin) -> Result {
+    pub fn update_rules(origin) -> Result {
       Ok(())
     }
-
-    // for testing purposes only; in real scenario, a proposal has to be made to GE
-    pub fn createTcx(origin) -> Result {
-      let who = ensure_signed(origin)?;
-      // let tcxId = tcx::Module<T>::create(ge_id, tcx_type)?;
-
-      Ok(())
-    }
-
 
 	}
 }
@@ -168,7 +157,7 @@ decl_event!(
   where 
     AccountId = <T as system::Trait>::AccountId,
     <T as Trait>::GeId,
-    Balance = BalanceOf<T>,
+    Balance = <T as balances::Trait>::Balance,
   {
 		Created(AccountId, GeId, Balance),
     Staked(AccountId, GeId, Balance),

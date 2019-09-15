@@ -4,12 +4,10 @@ use system::ensure_signed;
 use codec::{Encode, Decode};
 use rstd::result;
 use crate::ge;
-use crate::node;
-use support::traits::{Currency, LockableCurrency};
 
 
 /// The module's configuration trait.
-pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + node::Trait + ge::Trait  {
+pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + ge::Trait  {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 	type TcxId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
@@ -17,10 +15,8 @@ pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + node::Trai
 	type ActionId: Parameter + Member + Default + Copy;
 	type ListingId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
 	type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
-  type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+  type ContentHash: Parameter + Member + Default + Copy;
 }
-
-type BalanceOf<T> = <<T as ge::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
 #[derive(Encode, Decode)]
@@ -62,9 +58,9 @@ pub struct Vote<Balance> {
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Poll<U> {
-  votes_for: U,
-  votes_against: U,
+pub struct Poll<Balance> {
+  votes_for: Balance,
+  votes_against: Balance,
   passed: bool,
 }
 
@@ -80,13 +76,13 @@ decl_storage! {
     OwnedTcxsCount get(owned_tcxs_count): map T::GeId => T::TcxId;
 
 		// actual tcx
-    TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, T::ContentHash) => Listing<T::ListingId, T::ContentHash, BalanceOf<T>, T::Moment, T::ChallengeId, T::AccountId>;
+    TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, T::ContentHash) => Listing<T::ListingId, T::ContentHash, T::Balance, T::Moment, T::ChallengeId, T::AccountId>;
 		TcxListingsCount get(listing_count_of_tcr): map T::TcxId => T::ListingId;
     TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => T::ContentHash;
 
-    Challenges get(challenges): map T::ChallengeId => Challenge<BalanceOf<T>, T::Moment, T::AccountId>;
-    Votes get(votes): map (T::ChallengeId, T::AccountId) => Vote<BalanceOf<T>>;
-    Polls get(polls): map T::ChallengeId => Poll<BalanceOf<T>>;
+    Challenges get(challenges): map T::ChallengeId => Challenge<T::Balance, T::Moment, T::AccountId>;
+    Votes get(votes): map (T::ChallengeId, T::AccountId) => Vote<T::Balance>;
+    Polls get(polls): map T::ChallengeId => Poll<T::Balance>;
 
 		ChallengeNonce get(challenge_nonce): T::ChallengeId;
 	}
@@ -100,7 +96,8 @@ decl_module! {
 		// this is needed only if you are using events in your module
 		fn deposit_event() = default;
 
-		pub fn propose(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: BalanceOf<T>, action_id: T::ActionId) -> Result {
+		// TODO: check if node exists
+		pub fn propose(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: T::Balance, action_id: T::ActionId) -> Result {
 			let who = ensure_signed(origin)?;
 			
 			// deduction balace for application
@@ -144,7 +141,7 @@ decl_module! {
 		}
 
 		// TODO: node_id or listing_id; prevent multiple challenge
-    pub fn challenge(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: BalanceOf<T>) -> Result {
+    pub fn challenge(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: T::Balance) -> Result {
 			let who = ensure_signed(origin)?;
 
 			let ge_id = Self::owner_of(tcx_id).ok_or("TCX does not exist / TCX owner does not exist")?;
@@ -170,8 +167,8 @@ decl_module! {
 				amount,
 				voting_ends: voting_exp,
 				resolved: false,
-				reward_pool: <BalanceOf<T>>::from(0),
-				total_tokens: <BalanceOf<T>>::from(0),
+				reward_pool: T::Balance::from(0),
+				total_tokens: T::Balance::from(0),
 				owner: who.clone(),
 			};
 
@@ -186,7 +183,7 @@ decl_module! {
 
 
 			let challenge_nonce = <ChallengeNonce<T>>::get();
-			let new_challenge_nonce = challenge_nonce.checked_add(&T::ChallengeId::from(0)).ok_or("Exceed maximum challenge count")?;
+			let new_challenge_nonce = challenge_nonce.checked_add(&T::ChallengeId::from(1)).ok_or("Exceed maximum challenge count")?;
 			
 			// add a new challenge and the corresponding poll
 			<Challenges<T>>::insert(new_challenge_nonce, new_challenge);
@@ -205,7 +202,7 @@ decl_module! {
 		}
 
 		// TODO: prevent double votes, cannot vote on your own challenge?
-    pub fn vote(origin, challenge_id: T::ChallengeId, amount: BalanceOf<T>, value: bool) -> Result {
+    pub fn vote(origin, challenge_id: T::ChallengeId, amount: T::Balance, value: bool) -> Result {
 			let who = ensure_signed(origin)?;
 
 			// check if listing is challenged
@@ -345,6 +342,16 @@ decl_module! {
 
 			Ok(())
 		}
+
+		// create tcr: for testing purposes only
+		pub fn propose_tcx_creation(origin, ge_id: T::GeId, tcx_type: T::TcxType) -> Result {
+			// TODO: check if ge agrees
+			let governance_entity = <ge::Module<T>>::governance_entity(ge_id).ok_or("GE does not exist")?;
+
+			let tcx_id = Self::create(ge_id, tcx_type)?;
+
+			Ok(())
+		}
 	}
 }
 
@@ -352,11 +359,12 @@ decl_event!(
 	pub enum Event<T> 
 	where 
 		AccountId = <T as system::Trait>::AccountId,
-		ContentHash = <T as node::Trait>::ContentHash,
+		ContentHash = <T as Trait>::ContentHash,
 		TcxId = <T as Trait>::TcxId,
 		ActionId = <T as Trait>::ActionId,
-		Balance = <<T as ge::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance,
+		Balance = <T as balances::Trait>::Balance,
 		ChallengeId = <T as Trait>::ChallengeId,
+		GeId = <T as ge::Trait>::GeId,
 	{
 		Proposed(AccountId, TcxId, ContentHash, Balance, ActionId),
 		Challenged(AccountId, TcxId, ContentHash, Balance),
@@ -365,6 +373,7 @@ decl_event!(
 		Accepted(TcxId, ContentHash),
 		Rejected(TcxId, ContentHash),
 		Claimed(AccountId, ChallengeId),
+		Created(GeId, TcxId),
 	}
 );
 
@@ -390,7 +399,8 @@ impl<T: Trait> Module<T> {
 
 		<OwnedTcxsArray<T>>::insert((ge_id, new_owned_tcxs_count), new_all_tcxs_count);
 		<OwnedTcxsCount<T>>::insert(ge_id, new_owned_tcxs_count);
-
+		
+		Self::deposit_event(RawEvent::Created(ge_id, new_all_tcxs_count));
 		// return new tcx_id
 		Ok(new_all_tcxs_count)
 	}

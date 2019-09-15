@@ -60,13 +60,13 @@ decl_module! {
       <Nodes<T>>::insert(content_hash, new_node);
       <NodeOwner<T>>::insert(content_hash, sender.clone());
 
-      <AllNodesArray<T>>::insert(all_nodes_count, content_hash);
+      <AllNodesArray<T>>::insert(new_all_nodes_count, content_hash);
       AllNodesCount::put(new_all_nodes_count);
-      <AllNodesIndex<T>>::insert(content_hash, all_nodes_count);
+      <AllNodesIndex<T>>::insert(content_hash, new_all_nodes_count);
 
-      <OwnedNodesArray<T>>::insert((sender.clone(), owned_nodes_count), content_hash);
+      <OwnedNodesArray<T>>::insert((sender.clone(), new_owned_nodes_count), content_hash);
       <OwnedNodesCount<T>>::insert(sender.clone(), new_owned_nodes_count);
-      <OwnedNodesIndex<T>>::insert(content_hash, owned_nodes_count);
+      <OwnedNodesIndex<T>>::insert(content_hash, new_owned_nodes_count);
 
       Self::deposit_event(RawEvent::Created(sender, content_hash));
 

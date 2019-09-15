@@ -261,6 +261,7 @@ impl template::Trait for Runtime {
 }
 
 type TcxType = u64;
+type ContentHash = [u8; 32];
 
 impl tcx::Trait for Runtime {
 	type Event = Event;
@@ -269,18 +270,17 @@ impl tcx::Trait for Runtime {
 	type ActionId = u64;
 	type ListingId = u64;
 	type ChallengeId = u64;
-	type Currency = Balances;
+	type ContentHash = ContentHash;
 }
 
 impl ge::Trait for Runtime {
 	type Event = Event;
 	type GeId = u64;
-	type Currency = Balances;
 }
 
 impl node::Trait for Runtime {
 	type Event = Event;
-	type ContentHash = [u8; 32];
+	type ContentHash = ContentHash;
 }
 
 construct_runtime!(
