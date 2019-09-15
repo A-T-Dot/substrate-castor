@@ -266,6 +266,7 @@ impl tcx::Trait for Runtime {
 	type TcxType = u64;
 	type ActionId = u64;
 	type ListingId = u64;
+	type ChallengeId = u64;
 }
 
 impl ge::Trait for Runtime {

@@ -16,10 +16,10 @@ pub trait Trait: system::Trait + ge::Trait + timestamp::Trait + node::Trait {
 	type TcxType: Parameter + Member + Default + Copy;
 	type ActionId: Parameter + Member + Default + Copy;
 	type ListingId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
+	type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
 }
 
 type BalanceOf<T> = <<T as ge::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type ChallengeId = u32;
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
 #[derive(Encode, Decode)]
@@ -30,20 +30,19 @@ pub struct Tcx<TcxType> {
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Listing<ListingId, ContentHash, Balance, Moment, AccountId> {
+pub struct Listing<ListingId, ContentHash, Balance, Moment, ChallengeId, AccountId> {
 	id: ListingId,
   node_id: ContentHash,
   amount: Balance,
   application_expiry: Moment,
   whitelisted: bool,
-  challenge_id: u32,
+  challenge_id: ChallengeId,
 	owner: AccountId,
 }
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Challenge<ListingId, Balance, Moment, AccountId> {
-  listing_id: ListingId,
+pub struct Challenge<Balance, Moment, AccountId> {
   amount: Balance,
   voting_ends: Moment,
   resolved: bool,
@@ -62,8 +61,7 @@ pub struct Vote<Balance> {
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Poll<T, U> {
-  listing_hash: T,
+pub struct Poll<U> {
   votes_for: U,
   votes_against: U,
   passed: bool,
@@ -81,13 +79,15 @@ decl_storage! {
     OwnedTcxsCount get(owned_tcxs_count): map T::GeId => T::TcxId;
 
 		// actual tcx
-    TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, T::ContentHash) => Listing<T::ListingId, T::ContentHash, BalanceOf<T>, T::Moment, T::AccountId>;
+    TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, T::ContentHash) => Listing<T::ListingId, T::ContentHash, BalanceOf<T>, T::Moment, T::ChallengeId, T::AccountId>;
 		TcxListingsCount get(listing_count_of_tcr): map T::TcxId => T::ListingId;
     TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => T::ContentHash;
 
-    Challenges get(challenges): map ChallengeId => Challenge<T::ListingId, BalanceOf<T>, T::Moment, T::AccountId>;
-    Votes get(votes): map (ChallengeId, T::AccountId) => Vote<BalanceOf<T>>;
+    Challenges get(challenges): map T::ChallengeId => Challenge<BalanceOf<T>, T::Moment, T::AccountId>;
+    Votes get(votes): map (T::ChallengeId, T::AccountId) => Vote<BalanceOf<T>>;
+    Polls get(polls): map T::ChallengeId => Poll<BalanceOf<T>>;
 
+		ChallengeNonce get(challenge_nonce): T::ChallengeId;
 	}
 }
 
@@ -128,7 +128,7 @@ decl_module! {
 				node_id: node_id,
 				amount: amount,
 				whitelisted: false,
-				challenge_id: 0,
+				challenge_id: T::ChallengeId::from(0),
 				application_expiry: app_exp,
 				owner: who.clone(),
 			};
@@ -154,7 +154,7 @@ decl_module! {
 			let listing = Self::listing_of_tcr_by_node_id((tcx_id,node_id));
 			
 			// check if challengable
-			ensure!(listing.challenge_id == 0, "Listing is already challenged.");
+			ensure!(listing.challenge_id == T::ChallengeId::from(0), "Listing is already challenged.");
 			// owner - ensure!(listing.owner != sender, "You cannot challenge your own listing.");
 			ensure!(amount >= listing.amount, "Amount not enough to challenge");
 
@@ -165,40 +165,38 @@ decl_module! {
 			let commit_stage_len = governance_entity.commit_stage_len;
 			let voting_exp = now.checked_add(&commit_stage_len).ok_or("Overflow when setting voting expiry.")?;
 
-			// let challenge = Challenge {
-			// 	listing_hash,
-			// 	amount,
-			// 	voting_ends: voting_exp,
-			// 	resolved: false,
-			// 	reward_pool: <T::TokenBalance as As<u64>>::sa(0),
-			// 	total_tokens: <T::TokenBalance as As<u64>>::sa(0),
-			// 	owner: who.clone(),
-			// };
+			let new_challenge = Challenge {
+				amount,
+				voting_ends: voting_exp,
+				resolved: false,
+				reward_pool: <BalanceOf<T>>::from(0),
+				total_tokens: <BalanceOf<T>>::from(0),
+				owner: who.clone(),
+			};
 
-			// let poll = Poll {
-			// 	listing_hash,
-			// 	votes_for: listing.deposit,
-			// 	votes_against: deposit,
-			// 	passed: false,
-			// };
+			let new_poll = Poll {
+				votes_for: listing.amount,
+				votes_against: amount,
+				passed: false,
+			};
 
 			// check enough balance, lock it
 			// <token::Module<T>>::lock(sender.clone(), deposit, listing_hash)?;
 
-			// // global poll nonce
-			// // helps keep the count of challenges and in mapping votes
-			// let poll_nonce = <PollNonce<T>>::get();
-			// // add a new challenge and the corresponding poll in the respective collections
-			// <Challenges<T>>::insert(poll_nonce, challenge);
-			// <Polls<T>>::insert(poll_nonce, poll);
 
-			// // update listing with challenge id
-			// <Listings<T>>::mutate(listing_hash, |listing| {
-			// 	listing.challenge_id = poll_nonce;
-			// });
+			let challenge_nonce = <ChallengeNonce<T>>::get();
+			let new_challenge_nonce = challenge_nonce.checked_add(&T::ChallengeId::from(0)).ok_or("Exceed maximum challenge count")?;
+			
+			// add a new challenge and the corresponding poll
+			<Challenges<T>>::insert(new_challenge_nonce, new_challenge);
+			<Polls<T>>::insert(new_challenge_nonce, new_poll);
 
-			// // update the poll nonce
-			// <PollNonce<T>>::put(poll_nonce + 1);
+			// update listing with challenge id
+			<TcxListings<T>>::mutate((tcx_id, node_id), |listing| {
+				listing.challenge_id = new_challenge_nonce;
+			});
+
+			<ChallengeNonce<T>>::put(new_challenge_nonce);
 
 			Self::deposit_event(RawEvent::Challenged(who, tcx_id, node_id, amount));
 
@@ -208,7 +206,7 @@ decl_module! {
     pub fn vote(origin) -> Result {
 			let who = ensure_signed(origin)?;
 
-			// // check if listing is challenged
+			// check if listing is challenged
 			// ensure!(<Challenges<T>>::exists(challenge_id), "Challenge does not exist.");
 			// let challenge = Self::challenges(challenge_id);
 			// ensure!(challenge.resolved == false, "Challenge is already resolved.");
@@ -321,11 +319,11 @@ decl_module! {
 			Ok(())
 		}
 
-    pub fn claim(origin) -> Result {
+    pub fn claim(origin, challenge_id: T::ChallengeId) -> Result {
 			let who = ensure_signed(origin)?;
 
-			// // ensure challenge exists and has been resolved
-			// ensure!(<Challenges<T>>::exists(challenge_id), "Challenge not found.");
+			// ensure challenge exists and has been resolved
+			ensure!(<Challenges<T>>::exists(challenge_id), "Challenge not found.");
 			// let challenge = Self::challenges(challenge_id);
 			// ensure!(challenge.resolved == true, "Challenge is not resolved.");
 
