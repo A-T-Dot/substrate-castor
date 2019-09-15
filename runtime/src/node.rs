@@ -2,24 +2,34 @@ use support::{decl_module, decl_storage, decl_event, StorageValue, StorageMap, d
 use sr_primitives::traits::{ Member };
 use system::ensure_signed;
 use codec::{Encode, Decode};
-
+use rstd::prelude::*;
 /// The module's configuration trait.
 pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
   type ContentHash: Parameter + Member + Default + Copy;
+	type NodeType: Parameter + Member + Default + Copy;
 }
 
-#[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
-#[derive(Encode, Decode)]
-pub struct Node<ContentHash> {
-		pub id: ContentHash,
+#[cfg_attr(feature ="std", derive(Debug))]
+#[derive(Encode, Decode, Default, Clone, PartialEq)]
+pub struct Node<ContentHash, NodeType> {
+	pub id: ContentHash,
+	pub node_type: NodeType,
+	pub sources: Vec<ContentHash>
 }
+
+// #[cfg_attr(feature ="std", derive(Debug))]
+// #[derive(Encode, Decode, Default, Clone, PartialEq)]
+// pub struct Link {
+// 	pub source: u32,
+// 	pub target:u32,
+// }
 
 // This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as Node {
-    Nodes get(node): map T::ContentHash => Option<Node<T::ContentHash>>;
+    Nodes get(node): map T::ContentHash => Option<Node<T::ContentHash, T::NodeType>>;
     NodeOwner get(owner_of): map T::ContentHash => Option<T::AccountId>;
 
     AllNodesArray get(node_by_index): map u64 => T::ContentHash;
@@ -40,13 +50,15 @@ decl_module! {
 		// this is needed only if you are using events in your module
 		fn deposit_event() = default;
 
-		pub fn create(origin, content_hash: T::ContentHash) -> Result {
+		pub fn create(origin, content_hash: T::ContentHash, node_type: T::NodeType, sources: Vec<T::ContentHash>) -> Result {
 			let sender = ensure_signed(origin)?;
 
       ensure!(!<NodeOwner<T>>::exists(content_hash), "Content Node already exists");
-
+			ensure!(sources.len() <= 10, "Cannot link more than 10 sources");
 			let new_node = Node {
 					id: content_hash,
+					node_type,
+					sources: sources.clone(),
 			};
 
       let owned_nodes_count = Self::owned_nodes_count(sender.clone());
@@ -68,7 +80,7 @@ decl_module! {
       <OwnedNodesCount<T>>::insert(sender.clone(), new_owned_nodes_count);
       <OwnedNodesIndex<T>>::insert(content_hash, new_owned_nodes_count);
 
-      Self::deposit_event(RawEvent::Created(sender, content_hash));
+      Self::deposit_event(RawEvent::Created(sender, content_hash, node_type, sources));
 
 			Ok(())
 		}
@@ -117,9 +129,12 @@ decl_event!(
 	pub enum Event<T> 
 	where 
 		AccountId = <T as system::Trait>::AccountId,
-		ContentHash = <T as Trait>::ContentHash
+		ContentHash = <T as Trait>::ContentHash,
+		NodeType = <T as Trait>::NodeType,
+		VecContentHash = Vec<<T as Trait>::ContentHash>
+		,
 	{
-		Created(AccountId, ContentHash),
+		Created(AccountId, ContentHash, NodeType, VecContentHash),
 		Transferred(AccountId, AccountId, ContentHash),
 	}
 );

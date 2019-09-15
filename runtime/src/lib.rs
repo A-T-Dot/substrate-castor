@@ -281,6 +281,7 @@ impl ge::Trait for Runtime {
 impl node::Trait for Runtime {
 	type Event = Event;
 	type ContentHash = ContentHash;
+	type NodeType = u32;
 }
 
 construct_runtime!(
