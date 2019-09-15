@@ -323,23 +323,24 @@ decl_module! {
 
 			// reward depends on poll passed status and vote value
 			let poll = Self::polls(challenge_id);
-			let vote = Self::votes((challenge_id, sender.clone()));
+			let vote = Self::votes((challenge_id, who.clone()));
 
 			// ensure vote reward is not already claimed
 			ensure!(vote.claimed == false, "Vote reward has already been claimed.");
 
-			// // if winning party, calculate reward and transfer
-			// if poll.passed == vote.value {
-			// 			let reward_ratio = challenge.reward_pool.checked_div(&challenge.total_tokens).ok_or("overflow in calculating reward")?;
-			// 			let reward = reward_ratio.checked_mul(&vote.deposit).ok_or("overflow in calculating reward")?;
-			// 			let total = reward.checked_add(&vote.deposit).ok_or("overflow in calculating reward")?;
-			// 			<token::Module<T>>::unlock(sender.clone(), total, challenge.listing_hash)?;
+			// if winning party, calculate reward and transfer
+			if poll.passed == vote.value {
+				// TODO: claim reward
+				// let reward_ratio = challenge.reward_pool.checked_div(&challenge.total_tokens).ok_or("overflow in calculating reward")?;
+				// let reward = reward_ratio.checked_mul(&vote.deposit).ok_or("overflow in calculating reward")?;
+				// let total = reward.checked_add(&vote.deposit).ok_or("overflow in calculating reward")?;
+				// <token::Module<T>>::unlock(sender.clone(), total, challenge.listing_hash)?;
 
-			// 			Self::deposit_event(RawEvent::Claimed(sender.clone(), challenge_id));
-			// 	}
+				Self::deposit_event(RawEvent::Claimed(who.clone(), challenge_id));
+			}
 
-			// 	// update vote reward claimed status
-			// 	<Votes<T>>::mutate((challenge_id, sender), |vote| vote.claimed = true);
+			// update vote reward claimed status
+			<Votes<T>>::mutate((challenge_id, who), |vote| vote.claimed = true);
 
 			Ok(())
 		}
@@ -363,7 +364,7 @@ decl_event!(
 		Resolved(ChallengeId),
 		Accepted(TcxId, ContentHash),
 		Rejected(TcxId, ContentHash),
-		Claimed(AccountId, u32),
+		Claimed(AccountId, ChallengeId),
 	}
 );
 
