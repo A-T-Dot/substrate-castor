@@ -8,9 +8,11 @@ A new SRML-based Substrate node, ready for hacking.
 - [x] Node Creation and Ownership Transfer
 - [x] Simulate GE creation, stake and invest
 - [x] Multi-TCX per GE, Simulates TCX 5 steps
+- [x] Add sourcing features for nodes
+
+### lignyxg
 - [ ] Compute Voting Power
 - [ ] Link with GE
-- [ ] Add sourcing features for nodes
 
 #### optional
 - [ ] GE Withdraw
