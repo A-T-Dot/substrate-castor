@@ -15,7 +15,7 @@ pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + ge::Trait 
 	type ActionId: Parameter + Member + Default + Copy;
 	type ListingId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
 	type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
-  type ContentHash: Parameter + Member + Default + Copy;
+  	type ContentHash: Parameter + Member + Default + Copy;
 }
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
@@ -29,22 +29,22 @@ pub struct Tcx<TcxType> {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Listing<ListingId, ContentHash, Balance, Moment, ChallengeId, AccountId> {
 	id: ListingId,
-  node_id: ContentHash,
-  amount: Balance,
-  application_expiry: Moment,
-  whitelisted: bool,
-  challenge_id: ChallengeId,
+	node_id: ContentHash,
+	amount: Balance,
+	application_expiry: Moment,
+	whitelisted: bool,
+	challenge_id: ChallengeId,
 	owner: AccountId,
 }
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Challenge<Balance, Moment, AccountId> {
-  amount: Balance,
-  voting_ends: Moment,
-  resolved: bool,
-  reward_pool: Balance,
-  total_tokens: Balance,
+	amount: Balance,
+	voting_ends: Moment,
+	resolved: bool,
+	reward_pool: Balance,
+	total_tokens: Balance,
 	owner: AccountId,
 }
 
@@ -67,22 +67,22 @@ pub struct Poll<Balance> {
 // This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as Tcx {
-    AllTcxsArray get(tcx): map T::TcxId => Option<Tcx<T::TcxType>>;
+		AllTcxsArray get(tcx): map T::TcxId => Option<Tcx<T::TcxType>>;
 		AllTcxsCount get(all_tcxs_count): T::TcxId;
 
-    TcxOwner get(owner_of): map T::TcxId => Option<T::GeId>;
+		TcxOwner get(owner_of): map T::TcxId => Option<T::GeId>;
 
-    OwnedTcxsArray get(tcx_of_owner_by_index): map (T::GeId, T::TcxId) => T::TcxId;
-    OwnedTcxsCount get(owned_tcxs_count): map T::GeId => T::TcxId;
+		OwnedTcxsArray get(tcx_of_owner_by_index): map (T::GeId, T::TcxId) => T::TcxId;
+		OwnedTcxsCount get(owned_tcxs_count): map T::GeId => T::TcxId;
 
 		// actual tcx
-    TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, T::ContentHash) => Listing<T::ListingId, T::ContentHash, T::Balance, T::Moment, T::ChallengeId, T::AccountId>;
+    	TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, T::ContentHash) => Listing<T::ListingId, T::ContentHash, T::Balance, T::Moment, T::ChallengeId, T::AccountId>;
 		TcxListingsCount get(listing_count_of_tcr): map T::TcxId => T::ListingId;
-    TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => T::ContentHash;
+    	TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => T::ContentHash;
 
-    Challenges get(challenges): map T::ChallengeId => Challenge<T::Balance, T::Moment, T::AccountId>;
-    Votes get(votes): map (T::ChallengeId, T::AccountId) => Vote<T::Balance>;
-    Polls get(polls): map T::ChallengeId => Poll<T::Balance>;
+		Challenges get(challenges): map T::ChallengeId => Challenge<T::Balance, T::Moment, T::AccountId>;
+		Votes get(votes): map (T::ChallengeId, T::AccountId) => Vote<T::Balance>;
+		Polls get(polls): map T::ChallengeId => Poll<T::Balance>;
 
 		ChallengeNonce get(challenge_nonce): T::ChallengeId;
 	}

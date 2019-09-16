@@ -7,7 +7,7 @@ use rstd::prelude::*;
 pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-  type ContentHash: Parameter + Member + Default + Copy;
+  	type ContentHash: Parameter + Member + Default + Copy;
 	type NodeType: Parameter + Member + Default + Copy;
 }
 
@@ -29,15 +29,15 @@ pub struct Node<ContentHash, NodeType> {
 // This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as Node {
-    Nodes get(node): map T::ContentHash => Option<Node<T::ContentHash, T::NodeType>>;
-    NodeOwner get(owner_of): map T::ContentHash => Option<T::AccountId>;
+		Nodes get(node): map T::ContentHash => Option<Node<T::ContentHash, T::NodeType>>;
+		NodeOwner get(owner_of): map T::ContentHash => Option<T::AccountId>;
 
-    AllNodesArray get(node_by_index): map u64 => T::ContentHash;
-    AllNodesCount get(all_nodes_count): u64;
-    AllNodesIndex: map T::ContentHash => u64;
+		AllNodesArray get(node_by_index): map u64 => T::ContentHash;
+		AllNodesCount get(all_nodes_count): u64;
+		AllNodesIndex: map T::ContentHash => u64;
 
-    OwnedNodesArray get(node_of_owner_by_index): map (T::AccountId, u64) => T::ContentHash;
-    OwnedNodesCount get(owned_nodes_count): map T::AccountId => u64;
+		OwnedNodesArray get(node_of_owner_by_index): map (T::AccountId, u64) => T::ContentHash;
+		OwnedNodesCount get(owned_nodes_count): map T::AccountId => u64;
 		OwnedNodesIndex: map T::ContentHash => u64;
 	}
 }
@@ -53,7 +53,7 @@ decl_module! {
 		pub fn create(origin, content_hash: T::ContentHash, node_type: T::NodeType, sources: Vec<T::ContentHash>) -> Result {
 			let sender = ensure_signed(origin)?;
 
-      ensure!(!<NodeOwner<T>>::exists(content_hash), "Content Node already exists");
+      		ensure!(!<NodeOwner<T>>::exists(content_hash), "Content Node already exists");
 			ensure!(sources.len() <= 10, "Cannot link more than 10 sources");
 			let new_node = Node {
 					id: content_hash,
@@ -61,26 +61,26 @@ decl_module! {
 					sources: sources.clone(),
 			};
 
-      let owned_nodes_count = Self::owned_nodes_count(sender.clone());
+      		let owned_nodes_count = Self::owned_nodes_count(sender.clone());
 			let new_owned_nodes_count = owned_nodes_count.checked_add(1)
 					.ok_or("Exceed max node count per account")?;
 
-      let all_nodes_count = Self::all_nodes_count();
+      		let all_nodes_count = Self::all_nodes_count();
 			let new_all_nodes_count = all_nodes_count.checked_add(1)
 					.ok_or("Exceed total max node count")?;
 
-      <Nodes<T>>::insert(content_hash, new_node);
-      <NodeOwner<T>>::insert(content_hash, sender.clone());
+			<Nodes<T>>::insert(content_hash, new_node);
+			<NodeOwner<T>>::insert(content_hash, sender.clone());
 
-      <AllNodesArray<T>>::insert(new_all_nodes_count, content_hash);
-      AllNodesCount::put(new_all_nodes_count);
-      <AllNodesIndex<T>>::insert(content_hash, new_all_nodes_count);
+			<AllNodesArray<T>>::insert(new_all_nodes_count, content_hash);
+			AllNodesCount::put(new_all_nodes_count);
+			<AllNodesIndex<T>>::insert(content_hash, new_all_nodes_count);
 
-      <OwnedNodesArray<T>>::insert((sender.clone(), new_owned_nodes_count), content_hash);
-      <OwnedNodesCount<T>>::insert(sender.clone(), new_owned_nodes_count);
-      <OwnedNodesIndex<T>>::insert(content_hash, new_owned_nodes_count);
+			<OwnedNodesArray<T>>::insert((sender.clone(), new_owned_nodes_count), content_hash);
+			<OwnedNodesCount<T>>::insert(sender.clone(), new_owned_nodes_count);
+			<OwnedNodesIndex<T>>::insert(content_hash, new_owned_nodes_count);
 
-      Self::deposit_event(RawEvent::Created(sender, content_hash, node_type, sources));
+			Self::deposit_event(RawEvent::Created(sender, content_hash, node_type, sources));
 
 			Ok(())
 		}
@@ -90,10 +90,10 @@ decl_module! {
 			
 			let owner = Self::owner_of(content_hash).ok_or("No node owner")?;
 
-      ensure!(owner == sender.clone(), "Sender does not own the node");
+      		ensure!(owner == sender.clone(), "Sender does not own the node");
       
 			let owned_nodes_count_from = Self::owned_nodes_count(sender.clone());
-      let owned_nodes_count_to = Self::owned_nodes_count(to.clone());
+      		let owned_nodes_count_to = Self::owned_nodes_count(to.clone());
 
 			let new_owned_nodes_count_to = owned_nodes_count_to.checked_add(1)
 			    .ok_or("Transfer causes overflow for node receiver")?;
@@ -108,16 +108,16 @@ decl_module! {
 				<OwnedNodesIndex<T>>::insert(last_owned_node_id, owned_node_index);
 			}
 
-      <NodeOwner<T>>::insert(content_hash, to.clone());
-      <OwnedNodesIndex<T>>::insert(content_hash, owned_nodes_count_to);
+			<NodeOwner<T>>::insert(content_hash, to.clone());
+			<OwnedNodesIndex<T>>::insert(content_hash, owned_nodes_count_to);
 
-      <OwnedNodesArray<T>>::remove((sender.clone(), new_owned_nodes_count_from));
-      <OwnedNodesArray<T>>::insert((to.clone(), owned_nodes_count_to), content_hash);
+			<OwnedNodesArray<T>>::remove((sender.clone(), new_owned_nodes_count_from));
+			<OwnedNodesArray<T>>::insert((to.clone(), owned_nodes_count_to), content_hash);
 
-      <OwnedNodesCount<T>>::insert(sender.clone(), new_owned_nodes_count_from);
-      <OwnedNodesCount<T>>::insert(to.clone(), new_owned_nodes_count_to);
-			
-      Self::deposit_event(RawEvent::Transferred(sender, to, content_hash));
+			<OwnedNodesCount<T>>::insert(sender.clone(), new_owned_nodes_count_from);
+			<OwnedNodesCount<T>>::insert(to.clone(), new_owned_nodes_count_to);
+					
+			Self::deposit_event(RawEvent::Transferred(sender, to, content_hash));
 
 			Ok(())
 		}
@@ -131,8 +131,7 @@ decl_event!(
 		AccountId = <T as system::Trait>::AccountId,
 		ContentHash = <T as Trait>::ContentHash,
 		NodeType = <T as Trait>::NodeType,
-		VecContentHash = Vec<<T as Trait>::ContentHash>
-		,
+		VecContentHash = Vec<<T as Trait>::ContentHash>,
 	{
 		Created(AccountId, ContentHash, NodeType, VecContentHash),
 		Transferred(AccountId, AccountId, ContentHash),
