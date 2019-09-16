@@ -15,13 +15,13 @@ pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + ge::Trait 
 	type ActionId: Parameter + Member + Default + Copy;
 	type ListingId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
 	type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
-  	type ContentHash: Parameter + Member + Default + Copy;
+  type ContentHash: Parameter + Member + Default + Copy;
 }
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
 #[derive(Encode, Decode)]
 pub struct Tcx<TcxType> {
-  pub tcx_type: TcxType,
+	pub tcx_type: TcxType,
 }
 
 
@@ -51,17 +51,17 @@ pub struct Challenge<Balance, Moment, AccountId> {
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Vote<Balance> {
-  value: bool,
-  amount: Balance,
-  claimed: bool,
+	value: bool,
+	amount: Balance,
+	claimed: bool,
 }
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Poll<Balance> {
-  votes_for: Balance,
-  votes_against: Balance,
-  passed: bool,
+	votes_for: Balance,
+	votes_against: Balance,
+	passed: bool,
 }
 
 // This module's storage items.
@@ -76,9 +76,9 @@ decl_storage! {
 		OwnedTcxsCount get(owned_tcxs_count): map T::GeId => T::TcxId;
 
 		// actual tcx
-    	TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, T::ContentHash) => Listing<T::ListingId, T::ContentHash, T::Balance, T::Moment, T::ChallengeId, T::AccountId>;
+    TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, T::ContentHash) => Listing<T::ListingId, T::ContentHash, T::Balance, T::Moment, T::ChallengeId, T::AccountId>;
 		TcxListingsCount get(listing_count_of_tcr): map T::TcxId => T::ListingId;
-    	TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => T::ContentHash;
+    TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => T::ContentHash;
 
 		Challenges get(challenges): map T::ChallengeId => Challenge<T::Balance, T::Moment, T::AccountId>;
 		Votes get(votes): map (T::ChallengeId, T::AccountId) => Vote<T::Balance>;
@@ -141,7 +141,7 @@ decl_module! {
 		}
 
 		// TODO: node_id or listing_id; prevent multiple challenge
-    pub fn challenge(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: T::Balance) -> Result {
+		pub fn challenge(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: T::Balance) -> Result {
 			let who = ensure_signed(origin)?;
 
 			let ge_id = Self::owner_of(tcx_id).ok_or("TCX does not exist / TCX owner does not exist")?;
@@ -201,8 +201,8 @@ decl_module! {
 			Ok(())
 		}
 
-		// TODO: prevent double votes, cannot vote on your own challenge?
-    pub fn vote(origin, challenge_id: T::ChallengeId, amount: T::Balance, value: bool) -> Result {
+			// TODO: prevent double votes, cannot vote on your own challenge?
+		pub fn vote(origin, challenge_id: T::ChallengeId, amount: T::Balance, value: bool) -> Result {
 			let who = ensure_signed(origin)?;
 
 			// check if listing is challenged
@@ -240,7 +240,7 @@ decl_module! {
 			Ok(())
 		}
 
-    pub fn resolve(origin, tcx_id: T::TcxId, node_id: T::ContentHash) -> Result {
+		pub fn resolve(origin, tcx_id: T::TcxId, node_id: T::ContentHash) -> Result {
 			ensure!(<TcxListings<T>>::exists((tcx_id,node_id)), "Listing not found");
 
 			let listing = Self::listing_of_tcr_by_node_id((tcx_id,node_id));
@@ -312,7 +312,7 @@ decl_module! {
 			Ok(())
 		}
 
-    pub fn claim(origin, challenge_id: T::ChallengeId) -> Result {
+		pub fn claim(origin, challenge_id: T::ChallengeId) -> Result {
 			let who = ensure_signed(origin)?;
 
 			ensure!(<Challenges<T>>::exists(challenge_id), "Challenge not found.");

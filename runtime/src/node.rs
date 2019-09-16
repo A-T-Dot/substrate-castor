@@ -7,7 +7,7 @@ use rstd::prelude::*;
 pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-  	type ContentHash: Parameter + Member + Default + Copy;
+	type ContentHash: Parameter + Member + Default + Copy;
 	type NodeType: Parameter + Member + Default + Copy;
 }
 
@@ -53,7 +53,7 @@ decl_module! {
 		pub fn create(origin, content_hash: T::ContentHash, node_type: T::NodeType, sources: Vec<T::ContentHash>) -> Result {
 			let sender = ensure_signed(origin)?;
 
-      		ensure!(!<NodeOwner<T>>::exists(content_hash), "Content Node already exists");
+			ensure!(!<NodeOwner<T>>::exists(content_hash), "Content Node already exists");
 			ensure!(sources.len() <= 10, "Cannot link more than 10 sources");
 			let new_node = Node {
 					id: content_hash,
@@ -61,11 +61,11 @@ decl_module! {
 					sources: sources.clone(),
 			};
 
-      		let owned_nodes_count = Self::owned_nodes_count(sender.clone());
+			let owned_nodes_count = Self::owned_nodes_count(sender.clone());
 			let new_owned_nodes_count = owned_nodes_count.checked_add(1)
 					.ok_or("Exceed max node count per account")?;
 
-      		let all_nodes_count = Self::all_nodes_count();
+			let all_nodes_count = Self::all_nodes_count();
 			let new_all_nodes_count = all_nodes_count.checked_add(1)
 					.ok_or("Exceed total max node count")?;
 
@@ -90,13 +90,13 @@ decl_module! {
 			
 			let owner = Self::owner_of(content_hash).ok_or("No node owner")?;
 
-      		ensure!(owner == sender.clone(), "Sender does not own the node");
-      
+			ensure!(owner == sender.clone(), "Sender does not own the node");
+	  
 			let owned_nodes_count_from = Self::owned_nodes_count(sender.clone());
-      		let owned_nodes_count_to = Self::owned_nodes_count(to.clone());
+			let owned_nodes_count_to = Self::owned_nodes_count(to.clone());
 
 			let new_owned_nodes_count_to = owned_nodes_count_to.checked_add(1)
-			    .ok_or("Transfer causes overflow for node receiver")?;
+				.ok_or("Transfer causes overflow for node receiver")?;
 
 			let new_owned_nodes_count_from = owned_nodes_count_from.checked_sub(1)
 					.ok_or("Transfer causes underflow for node sender")?;
