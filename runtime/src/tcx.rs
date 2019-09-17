@@ -1,8 +1,8 @@
 use support::{decl_module, decl_storage, decl_event, StorageValue, StorageMap, dispatch::Result, Parameter, ensure};
-use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd };
+use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedConversion, SaturatedConversion};
 use system::ensure_signed;
 use codec::{Encode, Decode};
-use rstd::result;
+use rstd::{cmp, result, convert::{TryInto}};
 use crate::ge;
 
 
@@ -16,6 +16,7 @@ pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + ge::Trait 
   type ListingId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type ContentHash: Parameter + Member + Default + Copy;
+  // type Quota: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
 }
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
@@ -27,10 +28,12 @@ pub struct Tcx<TcxType> {
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Listing<ListingId, ContentHash, Balance, Moment, ChallengeId, AccountId> {
+pub struct Listing<ListingId, ContentHash, Balance, Moment, 
+ChallengeId, AccountId> {
   id: ListingId,
   node_id: ContentHash,
   amount: Balance,
+  quota: u128,
   application_expiry: Moment,
   whitelisted: bool,
   challenge_id: ChallengeId,
@@ -41,6 +44,7 @@ pub struct Listing<ListingId, ContentHash, Balance, Moment, ChallengeId, Account
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Challenge<Balance, Moment, AccountId> {
   amount: Balance,
+  quota: u128,
   voting_ends: Moment,
   resolved: bool,
   reward_pool: Balance,
@@ -53,6 +57,7 @@ pub struct Challenge<Balance, Moment, AccountId> {
 pub struct Vote<Balance> {
   value: bool,
   amount: Balance,
+  quota: u128,
   claimed: bool,
 }
 
@@ -60,7 +65,9 @@ pub struct Vote<Balance> {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Poll<Balance> {
   votes_for: Balance,
+  quota_for: u128,
   votes_against: Balance,
+  quota_against: u128,
   passed: bool,
 }
 
@@ -77,7 +84,7 @@ decl_storage! {
 
     // actual tcx
     TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, T::ContentHash) => Listing<T::ListingId, T::ContentHash, T::Balance, T::Moment, T::ChallengeId, T::AccountId>;
-    TcxListingsCount get(listing_count_of_tcr): map T::TcxId => T::ListingId;
+    TcxListingsCount get(listing_count_of_tcx): map T::TcxId => T::ListingId;
     TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => T::ContentHash;
 
     Challenges get(challenges): map T::ChallengeId => Challenge<T::Balance, T::Moment, T::AccountId>;
@@ -99,32 +106,43 @@ decl_module! {
     // TODO: check if node exists
     pub fn propose(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: T::Balance, action_id: T::ActionId) -> Result {
       let who = ensure_signed(origin)?;
+
+      // only member of ge can propose
+      let ge_id = Self::owner_of(tcx_id).ok_or("TCX does not exist / TCX owner does not exist")?;
+      let governance_entity = <ge::Module<T>>::governance_entity(ge_id).ok_or("GE does not exist")?;
+      ensure!(<ge::Module<T>>::is_member_of_ge(ge_id, who.clone()), "only member of ge can propose");
       
-      // deduction balace for application
+      // TODO: deduction balace for application
       // <token::Module<T>>::lock(sender.clone(), deposit, hashed.clone())?;
       
       // more than min deposit
-      let ge_id = Self::owner_of(tcx_id).ok_or("TCX does not exist / TCX owner does not exist")?;
-      let governance_entity = <ge::Module<T>>::governance_entity(ge_id).ok_or("GE does not exist")?;
       let min_deposit = governance_entity.min_deposit;
+      // TODO: quota instead of amount
       ensure!(amount >= min_deposit, "deposit should be more than min_deposit");
 
       let now = <timestamp::Module<T>>::get();
       let apply_stage_len = governance_entity.apply_stage_len;
       let app_exp = now.checked_add(&apply_stage_len).ok_or("Overflow when setting application expiry.")?;
 
-      let listing_id = Self::listing_count_of_tcr(tcx_id);
+      let listing_id = Self::listing_count_of_tcx(tcx_id);
       let new_listing_count = listing_id.checked_add(&T::ListingId::from(1)).ok_or("Exceed max listing count")?;
 
-      // check action_id
+      // TODO: check action_id
 
       ensure!(!<TcxListings<T>>::exists((tcx_id,node_id)), "Listing already exists");
+      
+      // calculate propose quota
+      let quota = match Self::calculate_quota(who.clone(), ge_id, amount) {
+        Ok(quota) => quota,
+        Err(e) => return Err(e),
+      };
 
       // create a new listing instance
       let new_listing = Listing {
         id: new_listing_count,
         node_id: node_id,
         amount: amount,
+        quota: quota,
         whitelisted: false,
         challenge_id: T::ChallengeId::from(0),
         application_expiry: app_exp,
@@ -135,7 +153,7 @@ decl_module! {
       <TcxListingsCount<T>>::insert(tcx_id, new_listing_count);
       <TcxListingsIndexHash<T>>::insert((tcx_id, new_listing_count), node_id);
 
-      Self::deposit_event(RawEvent::Proposed(who, tcx_id, node_id, amount, action_id));
+      Self::deposit_event(RawEvent::Proposed(who, tcx_id, node_id, amount, quota, action_id));
 
       Ok(())
     }
@@ -146,15 +164,21 @@ decl_module! {
 
       let ge_id = Self::owner_of(tcx_id).ok_or("TCX does not exist / TCX owner does not exist")?;
       let governance_entity = <ge::Module<T>>::governance_entity(ge_id).ok_or("GE does not exist")?;
+      
+      ensure!(<ge::Module<T>>::is_member_of_ge(ge_id, who.clone()), "only member of ge can challenge");
 
       ensure!(<TcxListings<T>>::exists((tcx_id,node_id)), "Listing not found");
       
       let listing = Self::listing_of_tcr_by_node_id((tcx_id,node_id));
       
+      let quota = match Self::calculate_quota(who.clone(), ge_id, amount) {
+        Ok(quota) => quota,
+        Err(e) => return Err(e),
+      };
       // check if challengable
       ensure!(listing.challenge_id == T::ChallengeId::from(0), "Listing is already challenged.");
       ensure!(listing.owner != who.clone(), "You cannot challenge your own listing.");
-      ensure!(amount >= listing.amount, "Amount not enough to challenge");
+      ensure!(quota >= listing.quota, "Quota not enough to challenge");
 
       let now = <timestamp::Module<T>>::get();
       // check if passed apply stage
@@ -165,6 +189,7 @@ decl_module! {
 
       let new_challenge = Challenge {
         amount,
+        quota: quota,
         voting_ends: voting_exp,
         resolved: false,
         reward_pool: T::Balance::from(0),
@@ -174,7 +199,9 @@ decl_module! {
 
       let new_poll = Poll {
         votes_for: listing.amount,
+        quota_for: listing.quota,
         votes_against: amount,
+        quota_against: quota,
         passed: false,
       };
 
@@ -196,7 +223,7 @@ decl_module! {
 
       <ChallengeNonce<T>>::put(new_challenge_nonce);
 
-      Self::deposit_event(RawEvent::Challenged(who, tcx_id, node_id, amount));
+      Self::deposit_event(RawEvent::Challenged(who, tcx_id, node_id, amount, quota));
 
       Ok(())
     }
@@ -217,17 +244,31 @@ decl_module! {
       // deduct the deposit for vote
       // TODO: <token::Module<T>>::lock(sender.clone(), deposit, challenge.listing_hash)?;
 
+      // calculate propose quota
+      let ge_id = <ge::Module<T>>::member_of_ge(who.clone()).ok_or("not a member of any Ge.")?;
+      let quota = match Self::calculate_quota(who.clone(), ge_id, amount) {
+        Ok(quota) => quota,
+        Err(e) => return Err(e),
+      };
+
       let mut poll_instance = Self::polls(challenge_id);
       // based on vote value, increase the count of votes (for or against)
       match value {
-        true => poll_instance.votes_for += amount,
-        false => poll_instance.votes_against += amount,
+        true => {
+          poll_instance.votes_for += amount;
+          poll_instance.quota_for += quota;
+        },
+        false => {
+          poll_instance.votes_against += amount;
+          poll_instance.quota_against += quota;
+        },
       }
 
       // create a new vote instance with the input params
       let vote_instance = Vote {
         value,
         amount,
+        quota,
         claimed: false,
       };
 
@@ -236,7 +277,7 @@ decl_module! {
 
       <Votes<T>>::insert((challenge_id, who.clone()), vote_instance);
 
-      Self::deposit_event(RawEvent::Voted(who, challenge_id, amount, value));
+      Self::deposit_event(RawEvent::Voted(who, challenge_id, amount, quota, value));
       Ok(())
     }
 
@@ -273,7 +314,7 @@ decl_module! {
 
       // update the poll instance
       <Polls<T>>::mutate(listing.challenge_id, |poll| {
-        if poll.votes_for >= poll.votes_against {
+        if poll.quota_for >= poll.quota_against {
             poll.passed = true;
             whitelisted = true;
         } else {
@@ -365,10 +406,14 @@ decl_event!(
     Balance = <T as balances::Trait>::Balance,
     ChallengeId = <T as Trait>::ChallengeId,
     GeId = <T as ge::Trait>::GeId,
+    Quota = u128,
   {
-    Proposed(AccountId, TcxId, ContentHash, Balance, ActionId),
-    Challenged(AccountId, TcxId, ContentHash, Balance),
-    Voted(AccountId, ChallengeId, Balance, bool),
+    /// (AccountId, TcxId, ContentHash, Balance, Quota, ActionId)
+    Proposed(AccountId, TcxId, ContentHash, Balance, Quota, ActionId),
+    /// (AccountId, TcxId, ContentHash, Balance, Quota)
+    Challenged(AccountId, TcxId, ContentHash, Balance, Quota),
+    /// (AccountId, ChallengeId, Balance, Quota, passed)
+    Voted(AccountId, ChallengeId, Balance, Quota, bool),
     Resolved(ChallengeId),
     Accepted(TcxId, ContentHash),
     Rejected(TcxId, ContentHash),
@@ -403,5 +448,20 @@ impl<T: Trait> Module<T> {
     Self::deposit_event(RawEvent::Created(ge_id, new_all_tcxs_count));
     // return new tcx_id
     Ok(new_all_tcxs_count)
+  }
+
+  pub fn calculate_quota(who: T::AccountId, ge_id: T::GeId, amount: T::Balance) -> result::Result<u128, &'static str> {
+    // calculate propose quota
+    let mut quota: u128 = 0;
+    let invested = <ge::Module<T>>::invested_amount((ge_id, who.clone()));
+    let min: u128 = cmp::min(invested, amount).saturated_into::<u128>();
+    quota = 20 * min;
+    let staked = <ge::Module<T>>::staked_amount((ge_id, who.clone()));
+    let max = cmp::max(<T::Balance>::from(0), amount-invested);
+    let max = cmp::max(max, staked).saturated_into::<u128>();
+    quota = quota + max;
+    // let temp: Option<T::Balance> = quota.try_into().ok();
+    // let quota = temp.ok_or("Cannot convert to balance")?;
+    Ok(quota)
   }
 }

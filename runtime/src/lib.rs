@@ -271,6 +271,7 @@ impl tcx::Trait for Runtime {
 	type ListingId = u64;
 	type ChallengeId = u64;
 	type ContentHash = ContentHash;
+	// type Quota = u128;
 }
 
 impl ge::Trait for Runtime {
