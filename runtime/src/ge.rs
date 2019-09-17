@@ -40,6 +40,9 @@ decl_storage! {
     // Invest
     InvestedAmount get(invested_amount): map (T::GeId, T::AccountId) => T::Balance;
     TotalInvestedAmount get(total_invested_amount): map T::GeId => T::Balance;
+
+    // Member
+    MemberOfGe get(member_of_ge): map T::AccountId => Option<T::GeId>;
   }
 }
 
@@ -166,6 +169,11 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
+  pub fn is_member_of_ge(ge_id: T::GeId, who: T::AccountId) -> bool {
+    let invested = Self::invested_amount((ge_id, who.clone()));
+    let staked = Self::staked_amount((ge_id, who.clone()));
+    (invested != <T::Balance>::from(0)) || (staked != <T::Balance>::from(0))
+  }
 
 }
 
