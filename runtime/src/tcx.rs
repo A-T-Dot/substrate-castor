@@ -1,5 +1,5 @@
 use support::{decl_module, decl_storage, decl_event, StorageValue, StorageMap, dispatch::Result, Parameter, ensure};
-use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd, SaturatedConversion};
+use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedConversion, SaturatedConversion};
 use system::ensure_signed;
 use codec::{Encode, Decode};
 use rstd::{cmp, result, convert::{TryInto}};
@@ -16,6 +16,7 @@ pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + ge::Trait 
   type ListingId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type ContentHash: Parameter + Member + Default + Copy;
+  // type Quota: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
 }
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
@@ -405,13 +406,14 @@ decl_event!(
     Balance = <T as balances::Trait>::Balance,
     ChallengeId = <T as Trait>::ChallengeId,
     GeId = <T as ge::Trait>::GeId,
+    Quota = u128,
   {
     /// (AccountId, TcxId, ContentHash, Balance, Quota, ActionId)
-    Proposed(AccountId, TcxId, ContentHash, Balance, u128, ActionId),
+    Proposed(AccountId, TcxId, ContentHash, Balance, Quota, ActionId),
     /// (AccountId, TcxId, ContentHash, Balance, Quota)
-    Challenged(AccountId, TcxId, ContentHash, Balance, u128),
+    Challenged(AccountId, TcxId, ContentHash, Balance, Quota),
     /// (AccountId, ChallengeId, Balance, Quota, passed)
-    Voted(AccountId, ChallengeId, Balance, u128, bool),
+    Voted(AccountId, ChallengeId, Balance, Quota, bool),
     Resolved(ChallengeId),
     Accepted(TcxId, ContentHash),
     Rejected(TcxId, ContentHash),
@@ -455,7 +457,8 @@ impl<T: Trait> Module<T> {
     let min: u128 = cmp::min(invested, amount).saturated_into::<u128>();
     quota = 20 * min;
     let staked = <ge::Module<T>>::staked_amount((ge_id, who.clone()));
-    let max: u128 = cmp::max(<T::Balance>::from(0), amount-invested).saturated_into::<u128>();
+    let max = cmp::max(<T::Balance>::from(0), amount-invested);
+    let max = cmp::max(max, staked).saturated_into::<u128>();
     quota = quota + max;
     // let temp: Option<T::Balance> = quota.try_into().ok();
     // let quota = temp.ok_or("Cannot convert to balance")?;
