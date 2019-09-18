@@ -62,7 +62,8 @@ pub type Hash = primitives::H256;
 pub type DigestItem = generic::DigestItem<Hash>;
 
 /// Used for castor.network modules
-mod currency;
+mod non_transfer_asset;
+mod energy;
 mod tcx;
 mod ge;
 mod node;

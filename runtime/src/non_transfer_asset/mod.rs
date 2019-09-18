@@ -1,20 +1,8 @@
-//! # Currency Module
-//!
-//! The Currency module provides functionality for handling accounts and balances.
+
+//! # Non-transfer Asset Module
 //! 
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
-//! 
-//! The Balances module provides functions for:
-//!
-//! - Getting and setting free balances.
-//! - Retrieving total, reserved and unreserved balances.
-//! - Repatriating a reserved balance to a beneficiary account that exists.
-//! - Transferring a balance between accounts (when not reserved).
-//! - Slashing an account balance.
-//! - Account creation and removal.
-//! - Managing total issuance.
-//! - Setting and managing locks.
+
+#![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
 use codec::{Codec, Encode, Decode};
@@ -23,9 +11,10 @@ use support::{
 	StorageValue, StorageMap, Parameter,
 	traits::{
 		Currency, LockableCurrency, ReservableCurrency,
+		Time,
 	// 	UpdateBalanceOutcome, OnFreeBalanceZero, OnUnbalanced,
 	// 	WithdrawReason, WithdrawReasons, LockIdentifier, ExistenceRequirement,
-	// 	Imbalance, SignedImbalance, ReservableCurrency, Get,
+	// 	Imbalance, SignedImbalance
 	},
 	dispatch::Result,
 };
@@ -36,8 +25,7 @@ use sr_primitives::{
 	},
 };
 use system::{
-	ensure_signed, ensure_root,
-	// IsDeadAccount, OnNewAccount,
+	ensure_signed
 };
 
 // test mod
@@ -45,22 +33,30 @@ use system::{
 // mod tests;
 
 /// The module's configuration trait.
-pub trait Trait: balances::Trait + timestamp::Trait {
+pub trait Trait: system::Trait + timestamp::Trait {
 	type Currency: Currency<Self::AccountId>;
+	// type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+	// type Currency: ReservableCurrency<Self::AccountId>;
+
+	/// Time use for computing energy increase
+	type Time: Time;
 
 	/// The overarching event type.
   type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+// type PositiveImbalanceOf<T> =
+// 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
+// type NegativeImbalanceOf<T> =
+// 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+// type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 
 // This module's storage items.
 decl_storage! {
-	trait Store for Module<T: Trait> as CurrencyModule {
-		// Just a dummy storage item.
-		// Here we are declaring a StorageValue, `Something` as a Option<u32>
-		// `get(something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
-		Something get(something): Option<u32>;
+	trait Store for Module<T: Trait> as CurrencyStorage {
+		// TODO
 	}
 }
 
@@ -68,14 +64,9 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where
 		AccountId = <T as system::Trait>::AccountId,
-		<T as balances::Trait>::Balance,
+		Balance = BalanceOf<T>,
 	{
-		/// A new account was created.
-		NewAccount(AccountId, Balance),
-		/// An account was reaped.
-		ReapedAccount(AccountId),
-		/// Transfer succeeded (from, to, value, fees).
-		Transfer(AccountId, AccountId, Balance, Balance),
+		EnergyUpdated(AccountId, Balance),
 	}
 );
 
