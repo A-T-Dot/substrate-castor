@@ -71,7 +71,8 @@ A new SRML-based Substrate node, ready for hacking.
     "target": "u32"
   },
   "VecContentHash": "Vec<ContentHash>",
-  "Quota": "Balance"
+  "Quota": "Balance",
+  "Metadata": "Hash"
 }
 ```
 
