@@ -100,6 +100,9 @@ decl_storage! {
 
 		/// The identity of the asset which is the one that is designated for paying the chain's transaction fee.
 		pub SpendingAssetId get(spending_asset_id) config(): T::AssetId;
+		
+		/// The identity of the asset which is the one that is designated for action reward.
+		pub FeedingAssetId get(feeding_asset_id) config(): T::AssetId;
 	}
 	add_extra_genesis {
 		config(assets): Vec<T::AssetId>;
@@ -933,6 +936,15 @@ impl<T: Trait> AssetIdProvider for SpendingAssetIdProvider<T> {
 	}
 }
 
+pub struct FeedingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> AssetIdProvider for FeedingAssetIdProvider<T> {
+	type AssetId = T::AssetId;
+	fn asset_id() -> Self::AssetId {
+		<Module<T>>::feeding_asset_id()
+	}
+}
+
 pub struct ClaimingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
 
 impl<T: Trait> AssetIdProvider for ClaimingAssetIdProvider<T> {
@@ -944,4 +956,5 @@ impl<T: Trait> AssetIdProvider for ClaimingAssetIdProvider<T> {
 
 pub type StakingAssetCurrency<T> = AssetCurrency<T, StakingAssetIdProvider<T>>;
 pub type SpendingAssetCurrency<T> = AssetCurrency<T, SpendingAssetIdProvider<T>>;
+pub type FeedingAssetCurrency<T> = AssetCurrency<T, FeedingAssetIdProvider<T>>;
 pub type ClaimingAssetCurrency<T> = AssetCurrency<T, ClaimingAssetIdProvider<T>>;
