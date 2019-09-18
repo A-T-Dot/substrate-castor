@@ -22,7 +22,7 @@ A new SRML-based Substrate node, ready for hacking.
 ### Custom Types
 ```
 {
-  "ContentHash": "[u8; 32]",
+  "ContentHash": "Hash",
   "NodeType": "u32",
   "Node": {
     "id": "ContentHash",
@@ -47,6 +47,7 @@ A new SRML-based Substrate node, ready for hacking.
     "owner": "AccountId"
   },
   "ChallengeId": "u64",
+  "ListingId": "u64",
   "Listing": {
     "id": "ListingId",
     "node_id": "ContentHash",
@@ -56,7 +57,6 @@ A new SRML-based Substrate node, ready for hacking.
     "challenge_id": "ChallengeId",
     "owner": "AccountId"
   },
-  "ListingId": "u64",
   "Poll": {
     "votes_for": "Balance",
     "votes_against": "Balance",
@@ -69,7 +69,9 @@ A new SRML-based Substrate node, ready for hacking.
   "Link": {
     "source": "u32",
     "target": "u32"
-  }
+  },
+  "VecContentHash": "Vec<ContentHash>",
+  "Quota": "Balance"
 }
 ```
 
