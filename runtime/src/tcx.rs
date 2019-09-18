@@ -1,5 +1,5 @@
 use support::{decl_module, decl_storage, decl_event, StorageValue, StorageMap, dispatch::Result, Parameter, ensure};
-use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedConversion, SaturatedConversion};
+use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedMul};
 use system::ensure_signed;
 use codec::{Encode, Decode};
 use rstd::{cmp, result, convert::{TryInto}};
@@ -16,7 +16,6 @@ pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + ge::Trait 
   type ListingId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type ContentHash: Parameter + Member + Default + Copy;
-  // type Quota: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
 }
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
@@ -33,7 +32,7 @@ ChallengeId, AccountId> {
   id: ListingId,
   node_id: ContentHash,
   amount: Balance,
-  quota: u128,
+  quota: Balance,
   application_expiry: Moment,
   whitelisted: bool,
   challenge_id: ChallengeId,
@@ -44,7 +43,7 @@ ChallengeId, AccountId> {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Challenge<Balance, Moment, AccountId, TcxId> {
   amount: Balance,
-  quota: u128,
+  quota: Balance,
   voting_ends: Moment,
   resolved: bool,
   reward_pool: Balance,
@@ -58,7 +57,7 @@ pub struct Challenge<Balance, Moment, AccountId, TcxId> {
 pub struct Vote<Balance> {
   value: bool,
   amount: Balance,
-  quota: u128,
+  quota: Balance,
   claimed: bool,
 }
 
@@ -66,9 +65,9 @@ pub struct Vote<Balance> {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Poll<Balance> {
   votes_for: Balance,
-  quota_for: u128,
+  quota_for: Balance,
   votes_against: Balance,
-  quota_against: u128,
+  quota_against: Balance,
   passed: bool,
 }
 
@@ -411,7 +410,7 @@ decl_event!(
     Balance = <T as balances::Trait>::Balance,
     ChallengeId = <T as Trait>::ChallengeId,
     GeId = <T as ge::Trait>::GeId,
-    Quota = u128,
+    Quota = <T as balances::Trait>::Balance,
   {
     /// (AccountId, TcxId, ContentHash, Balance, Quota, ActionId)
     Proposed(AccountId, TcxId, ContentHash, Balance, Quota, ActionId),
@@ -455,18 +454,16 @@ impl<T: Trait> Module<T> {
     Ok(new_all_tcxs_count)
   }
 
-  pub fn calculate_quota(who: T::AccountId, ge_id: T::GeId, amount: T::Balance) -> result::Result<u128, &'static str> {
+  pub fn calculate_quota(who: T::AccountId, ge_id: T::GeId, amount: T::Balance) -> result::Result<T::Balance, &'static str> {
     // calculate propose quota
-    let mut quota: u128 = 0;
     let invested = <ge::Module<T>>::invested_amount((ge_id, who.clone()));
-    let min: u128 = cmp::min(invested, amount).saturated_into::<u128>();
-    quota = 20 * min;
+    let min = cmp::min(invested, amount);
+    let factor = T::Balance::from(20);
+    let quota = min.checked_mul(&factor).ok_or("Overflow calculating A shares.")?;
     let staked = <ge::Module<T>>::staked_amount((ge_id, who.clone()));
     let max = cmp::max(<T::Balance>::from(0), amount-invested);
-    let max = cmp::max(max, staked).saturated_into::<u128>();
-    quota = quota + max;
-    // let temp: Option<T::Balance> = quota.try_into().ok();
-    // let quota = temp.ok_or("Cannot convert to balance")?;
+    let max = cmp::max(max, staked);
+    let quota = quota.checked_add(&max).ok_or("Overflow calculating B shares.")?;
     Ok(quota)
   }
 }
