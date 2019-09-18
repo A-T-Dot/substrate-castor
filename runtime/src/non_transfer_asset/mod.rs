@@ -76,7 +76,7 @@ pub struct BalanceLock<Balance, BlockNumber> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as GenericAsset {
+	trait Store for Module<T: Trait> as NonTransferAssets {
 		/// Total issuance of a given asset.
 		pub TotalIssuance get(total_issuance): map T::AssetId => T::Balance;
 
