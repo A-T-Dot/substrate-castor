@@ -41,8 +41,6 @@ decl_storage! {
     InvestedAmount get(invested_amount): map (T::GeId, T::AccountId) => T::Balance;
     TotalInvestedAmount get(total_invested_amount): map T::GeId => T::Balance;
 
-    // Member
-    MemberOfGe get(member_of_ge): map T::AccountId => Option<T::GeId>;
   }
 }
 

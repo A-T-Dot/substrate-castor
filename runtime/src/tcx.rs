@@ -42,7 +42,7 @@ ChallengeId, AccountId> {
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Challenge<Balance, Moment, AccountId> {
+pub struct Challenge<Balance, Moment, AccountId, TcxId> {
   amount: Balance,
   quota: u128,
   voting_ends: Moment,
@@ -50,6 +50,7 @@ pub struct Challenge<Balance, Moment, AccountId> {
   reward_pool: Balance,
   total_tokens: Balance,
   owner: AccountId,
+  tcx_id: TcxId, // to check if voter is a member of ge
 }
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
@@ -87,7 +88,7 @@ decl_storage! {
     TcxListingsCount get(listing_count_of_tcx): map T::TcxId => T::ListingId;
     TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => T::ContentHash;
 
-    Challenges get(challenges): map T::ChallengeId => Challenge<T::Balance, T::Moment, T::AccountId>;
+    Challenges get(challenges): map T::ChallengeId => Challenge<T::Balance, T::Moment, T::AccountId, T::TcxId>;
     Votes get(votes): map (T::ChallengeId, T::AccountId) => Vote<T::Balance>;
     Polls get(polls): map T::ChallengeId => Poll<T::Balance>;
 
@@ -195,6 +196,7 @@ decl_module! {
         reward_pool: T::Balance::from(0),
         total_tokens: T::Balance::from(0),
         owner: who.clone(),
+        tcx_id
       };
 
       let new_poll = Poll {
@@ -223,7 +225,7 @@ decl_module! {
 
       <ChallengeNonce<T>>::put(new_challenge_nonce);
 
-      Self::deposit_event(RawEvent::Challenged(who, tcx_id, node_id, amount, quota));
+      Self::deposit_event(RawEvent::Challenged(who, new_challenge_nonce, tcx_id, node_id, amount, quota));
 
       Ok(())
     }
@@ -245,7 +247,9 @@ decl_module! {
       // TODO: <token::Module<T>>::lock(sender.clone(), deposit, challenge.listing_hash)?;
 
       // calculate propose quota
-      let ge_id = <ge::Module<T>>::member_of_ge(who.clone()).ok_or("not a member of any Ge.")?;
+      let ge_id = Self::owner_of(challenge.tcx_id).ok_or("Cannot find ge of tcx")?;
+      ensure!(<ge::Module<T>>::is_member_of_ge(ge_id, who.clone()), "only member of ge can vote");
+
       let quota = match Self::calculate_quota(who.clone(), ge_id, amount) {
         Ok(quota) => quota,
         Err(e) => return Err(e),
@@ -402,6 +406,7 @@ decl_event!(
     AccountId = <T as system::Trait>::AccountId,
     ContentHash = <T as Trait>::ContentHash,
     TcxId = <T as Trait>::TcxId,
+    TcxType = <T as Trait>::TcxType,
     ActionId = <T as Trait>::ActionId,
     Balance = <T as balances::Trait>::Balance,
     ChallengeId = <T as Trait>::ChallengeId,
@@ -411,14 +416,14 @@ decl_event!(
     /// (AccountId, TcxId, ContentHash, Balance, Quota, ActionId)
     Proposed(AccountId, TcxId, ContentHash, Balance, Quota, ActionId),
     /// (AccountId, TcxId, ContentHash, Balance, Quota)
-    Challenged(AccountId, TcxId, ContentHash, Balance, Quota),
+    Challenged(AccountId, ChallengeId, TcxId, ContentHash, Balance, Quota),
     /// (AccountId, ChallengeId, Balance, Quota, passed)
     Voted(AccountId, ChallengeId, Balance, Quota, bool),
     Resolved(ChallengeId),
     Accepted(TcxId, ContentHash),
     Rejected(TcxId, ContentHash),
     Claimed(AccountId, ChallengeId),
-    Created(GeId, TcxId),
+    Created(GeId, TcxId, TcxType),
   }
 );
 
@@ -445,7 +450,7 @@ impl<T: Trait> Module<T> {
     <OwnedTcxsArray<T>>::insert((ge_id, new_owned_tcxs_count), new_all_tcxs_count);
     <OwnedTcxsCount<T>>::insert(ge_id, new_owned_tcxs_count);
     
-    Self::deposit_event(RawEvent::Created(ge_id, new_all_tcxs_count));
+    Self::deposit_event(RawEvent::Created(ge_id, new_all_tcxs_count, tcx_type));
     // return new tcx_id
     Ok(new_all_tcxs_count)
   }
