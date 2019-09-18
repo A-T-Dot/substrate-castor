@@ -20,8 +20,9 @@ pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + ge::Trait 
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
 #[derive(Encode, Decode)]
-pub struct Tcx<TcxType> {
+pub struct Tcx<TcxType, Metadata> {
   pub tcx_type: TcxType,
+  pub metadata: Metadata,
 }
 
 
@@ -74,7 +75,7 @@ pub struct Poll<Balance> {
 // This module's storage items.
 decl_storage! {
   trait Store for Module<T: Trait> as Tcx {
-    AllTcxsArray get(tcx): map T::TcxId => Option<Tcx<T::TcxType>>;
+    AllTcxsArray get(tcx): map T::TcxId => Option<Tcx<T::TcxType, T::Metadata>>;
     AllTcxsCount get(all_tcxs_count): T::TcxId;
 
     TcxOwner get(owner_of): map T::TcxId => Option<T::GeId>;
@@ -104,7 +105,9 @@ decl_module! {
     fn deposit_event() = default;
 
     // TODO: check if node exists
-    pub fn propose(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: T::Balance, action_id: T::ActionId) -> Result {
+    pub fn propose(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: T::Balance, 
+    action_id: T::ActionId) -> Result {
+      
       let who = ensure_signed(origin)?;
 
       // only member of ge can propose
@@ -388,11 +391,11 @@ decl_module! {
     }
 
     // create tcr: for testing purposes only
-    pub fn propose_tcx_creation(origin, ge_id: T::GeId, tcx_type: T::TcxType) -> Result {
+    pub fn propose_tcx_creation(origin, ge_id: T::GeId, tcx_type: T::TcxType, metadata: T::Metadata) -> Result {
       // TODO: check if ge agrees
       let governance_entity = <ge::Module<T>>::governance_entity(ge_id).ok_or("GE does not exist")?;
 
-      let tcx_id = Self::create(ge_id, tcx_type)?;
+      let tcx_id = Self::create(ge_id, tcx_type, metadata)?;
 
       Ok(())
     }
@@ -411,6 +414,7 @@ decl_event!(
     ChallengeId = <T as Trait>::ChallengeId,
     GeId = <T as ge::Trait>::GeId,
     Quota = <T as balances::Trait>::Balance,
+    Metadata = <T as ge::Trait>::Metadata,
   {
     /// (AccountId, TcxId, ContentHash, Balance, Quota, ActionId)
     Proposed(AccountId, TcxId, ContentHash, Balance, Quota, ActionId),
@@ -422,12 +426,12 @@ decl_event!(
     Accepted(TcxId, ContentHash),
     Rejected(TcxId, ContentHash),
     Claimed(AccountId, ChallengeId),
-    Created(GeId, TcxId, TcxType),
+    Created(GeId, TcxId, TcxType, Metadata),
   }
 );
 
 impl<T: Trait> Module<T> {
-  pub fn create(ge_id: T::GeId, tcx_type: T::TcxType) -> rstd::result::Result<T::TcxId, &'static str> {
+  pub fn create(ge_id: T::GeId, tcx_type: T::TcxType, metadata: T::Metadata) -> rstd::result::Result<T::TcxId, &'static str> {
     let one = T::TcxId::from(1 as u32);
 
     // check global tcx count
@@ -440,6 +444,7 @@ impl<T: Trait> Module<T> {
 
     let tcx  =  Tcx {
       tcx_type: tcx_type,
+      metadata: metadata,
     };
     <AllTcxsArray<T>>::insert(new_all_tcxs_count, tcx);
     <AllTcxsCount<T>>::put(new_all_tcxs_count);
@@ -449,7 +454,7 @@ impl<T: Trait> Module<T> {
     <OwnedTcxsArray<T>>::insert((ge_id, new_owned_tcxs_count), new_all_tcxs_count);
     <OwnedTcxsCount<T>>::insert(ge_id, new_owned_tcxs_count);
     
-    Self::deposit_event(RawEvent::Created(ge_id, new_all_tcxs_count, tcx_type));
+    Self::deposit_event(RawEvent::Created(ge_id, new_all_tcxs_count, tcx_type, metadata));
     // return new tcx_id
     Ok(new_all_tcxs_count)
   }

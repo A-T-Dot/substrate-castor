@@ -271,12 +271,12 @@ impl tcx::Trait for Runtime {
 	type ListingId = u64;
 	type ChallengeId = u64;
 	type ContentHash = ContentHash;
-	// type Quota = u128;
 }
 
 impl ge::Trait for Runtime {
 	type Event = Event;
 	type GeId = u64;
+	type Metadata = ContentHash;
 }
 
 impl node::Trait for Runtime {
