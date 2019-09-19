@@ -276,7 +276,7 @@ impl tcx::Trait for Runtime {
 impl ge::Trait for Runtime {
 	type Event = Event;
 	type GeId = u64;
-	type ContentHash = ContentHash;
+	type Metadata = ContentHash;
 }
 
 impl node::Trait for Runtime {
