@@ -36,7 +36,8 @@ A new SRML-based Substrate node, ready for hacking.
     "threshold": "u64",
     "min_deposit": "Balance",
     "apply_stage_len": "Moment",
-    "commit_stage_len": "Moment"
+    "commit_stage_len": "Moment",
+    "content_hash": "ContentHash"
   },
   "Challenge": {
     "amount": "Balance",
@@ -63,7 +64,8 @@ A new SRML-based Substrate node, ready for hacking.
     "passed": "bool"
   },
   "Tcx": {
-    "tcx_type": "u64"
+    "tcx_type": "u64",
+    "content_hash": "ContentHash"
   },
   "TcxType": "u64",
   "Link": {
@@ -71,8 +73,7 @@ A new SRML-based Substrate node, ready for hacking.
     "target": "u32"
   },
   "VecContentHash": "Vec<ContentHash>",
-  "Quota": "Balance",
-  "Metadata": "Hash"
+  "Quota": "Balance"
 }
 ```
 
