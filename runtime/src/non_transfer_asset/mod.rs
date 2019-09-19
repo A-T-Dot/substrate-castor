@@ -86,31 +86,24 @@ decl_storage! {
 		/// The reserved balance of a given asset under an account.
 		pub ReservedBalance: double_map T::AssetId, twox_128(T::AccountId) => T::Balance;
 
+		/// Any liquidity locks on some account balances.
+		pub Locks get(locks): double_map T::AssetId, twox_128(T::AccountId) => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
+
 		/// Next available ID for user-created asset.
 		pub NextAssetId get(next_asset_id) config(): T::AssetId;
 
-		/// Any liquidity locks on some account balances.
-		pub Locks get(locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
-
-		/// The identity of the asset which is the one that is designated for the chain's staking system.
-		pub StakingAssetId get(staking_asset_id) config(): T::AssetId;
+		/// The identity of the asset which is the one that is designated for the chain's transaction energy
+		pub EnergyAssetId get(energy_asset_id) config(): T::AssetId;
 
 		/// The identity of the asset which is the one that is designated for the chain's encouraging system.
 		pub ClaimingAssetId get(claiming_asset_id) config(): T::AssetId;
-
-		/// The identity of the asset which is the one that is designated for paying the chain's transaction fee.
-		pub SpendingAssetId get(spending_asset_id) config(): T::AssetId;
-		
-		/// The identity of the asset which is the one that is designated for action reward.
-		pub FeedingAssetId get(feeding_asset_id) config(): T::AssetId;
 	}
 	add_extra_genesis {
 		config(assets): Vec<T::AssetId>;
 
 		build(|config: &GenesisConfig<T>| {
 			config.assets.iter().for_each(|asset_id| {
-				<TotalIssuance<T>>::insert(asset_id, &Zero::zero());
-				<FreeBalance<T>>::insert(asset_id, &<<T as system::Trait>::AccountId as Default>::default(), &Zero::zero());
+				<Module<T>>::initialize_asset(*asset_id, None, AssetOptions { initial_issuance: T::Balance::zero() });
 			});
 		});
 	}
@@ -135,6 +128,13 @@ decl_event!(
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
+
+		/// Can be used to create reserved tokens.
+		/// Requires Root call.
+		fn create_reserved(origin, asset_id: T::AssetId, options: AssetOptions<T::Balance>) -> Result {
+			ensure_root(origin)?;
+			Self::create_asset(Some(asset_id), None, options)
+		}
 	}
 }
 
@@ -167,14 +167,24 @@ impl<T: Trait> Module<T> {
 			asset_id
 		};
 
+		// Initialize 
+		Self::initialize_asset(asset_id, from_account, options);
+
+		Ok(())
+	}
+
+	/// Initialize asset
+	fn initialize_asset(
+		asset_id: T::AssetId,
+		from_account: Option<T::AccountId>,
+		options: AssetOptions<T::Balance>,
+	) {
 		let account_id = from_account.unwrap_or_default();
 
 		<TotalIssuance<T>>::insert(asset_id, &options.initial_issuance);
 		<FreeBalance<T>>::insert(&asset_id, &account_id, &options.initial_issuance);
 
 		Self::deposit_event(RawEvent::Created(asset_id, account_id, options));
-
-		Ok(())
 	}
 
 	/// Mint account's amount
@@ -235,44 +245,6 @@ impl<T: Trait> Module<T> {
 		<FreeBalance<T>>::mutate(asset_id, to, |balance| *balance -= amount);
 		// send event
 		Self::deposit_event(RawEvent::Burned(*asset_id, to.clone(), amount));
-	}
-
-	/// Convert account's amount
-	///
-	/// # Arguments
-	/// * `owner`: The initiator account of this call
-	/// * `src_asset_id`: An ID of a reserved asset
-	/// * `dst_asset_id`: An ID of a reserved asset.
-	/// * `src_burn_amount`: burn amount.
-	/// * `dst_mint_amount`: mint amount.
-	///
-	pub fn make_convert(
-		owner: &T::AccountId,
-		src_asset_id: &T::AssetId,
-		dst_asset_id: &T::AssetId,
-		src_burn_amount: T::Balance,
-		dst_mint_amount: T::Balance
-	) -> Result {
-		// ensure withdraw
-		let new_src_balance = Self::free_balance(src_asset_id, owner)
-			.checked_sub(&src_burn_amount)
-			.ok_or("balance too low to src amount")?;
-		Self::ensure_can_withdraw(src_asset_id, owner, src_burn_amount, WithdrawReason::TransactionPayment, new_src_balance)?;
-
-		// ensure
-		Self::check_burn(src_asset_id, owner, src_burn_amount)?;
-		Self::check_mint(dst_asset_id, owner, dst_mint_amount)?;
-
-		// do save
-		Self::do_burn(src_asset_id, owner, src_burn_amount);
-		Self::do_mint(dst_asset_id, owner, dst_mint_amount);
-
-		Ok(())
-	}
-
-	/// Get an account's total balance of an asset kind.
-	pub fn total_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
-		Self::free_balance(asset_id, who) + Self::reserved_balance(asset_id, who)
 	}
 
 	/// Get an account's free balance of an asset kind.
@@ -343,7 +315,11 @@ impl<T: Trait> Module<T> {
 	/// is less than `amount`, then a non-zero second item will be returned.
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn slash_reserved(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
+	fn slash_reserved(
+		asset_id: &T::AssetId,
+		who: &T::AccountId,
+		amount: T::Balance
+	) -> Option<T::Balance> {
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let slash = rstd::cmp::min(original_reserve_balance, amount);
 		let new_reserve_balance = original_reserve_balance - slash;
@@ -391,16 +367,12 @@ impl<T: Trait> Module<T> {
 		reason: WithdrawReason,
 		new_balance: T::Balance,
 	) -> Result {
-		if asset_id != &Self::staking_asset_id() {
-			return Ok(());
-		}
-
-		let locks = Self::locks(who);
+		let locks = Self::locks(asset_id, who);
 		if locks.is_empty() {
 			return Ok(());
 		}
 		let now = <system::Module<T>>::block_number();
-		if Self::locks(who)
+		if Self::locks(asset_id, who)
 			.into_iter()
 			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.contains(reason))
 		{
@@ -414,17 +386,26 @@ impl<T: Trait> Module<T> {
 
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn set_reserved_balance(asset_id: &T::AssetId, who: &T::AccountId, balance: T::Balance) {
+	fn set_reserved_balance(
+		asset_id: &T::AssetId,
+		who: &T::AccountId,
+		balance: T::Balance
+	) {
 		<ReservedBalance<T>>::insert(asset_id, who, &balance);
 	}
 
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn set_free_balance(asset_id: &T::AssetId, who: &T::AccountId, balance: T::Balance) {
+	fn set_free_balance(
+		asset_id: &T::AssetId,
+		who: &T::AccountId,
+		balance: T::Balance
+	) {
 		<FreeBalance<T>>::insert(asset_id, who, &balance);
 	}
 
 	fn set_lock(
+		asset_id: &T::AssetId,
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
@@ -438,7 +419,7 @@ impl<T: Trait> Module<T> {
 			until,
 			reasons,
 		});
-		let mut locks = <Module<T>>::locks(who)
+		let mut locks = <Module<T>>::locks(asset_id, who)
 			.into_iter()
 			.filter_map(|l| {
 				if l.id == id {
@@ -453,10 +434,11 @@ impl<T: Trait> Module<T> {
 		if let Some(lock) = new_lock {
 			locks.push(lock)
 		}
-		<Locks<T>>::insert(who, locks);
+		<Locks<T>>::insert(asset_id, who, &locks);
 	}
 
 	fn extend_lock(
+		asset_id: &T::AssetId,
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
@@ -470,7 +452,7 @@ impl<T: Trait> Module<T> {
 			until,
 			reasons,
 		});
-		let mut locks = <Module<T>>::locks(who)
+		let mut locks = <Module<T>>::locks(asset_id, who)
 			.into_iter()
 			.filter_map(|l| {
 				if l.id == id {
@@ -490,16 +472,20 @@ impl<T: Trait> Module<T> {
 		if let Some(lock) = new_lock {
 			locks.push(lock)
 		}
-		<Locks<T>>::insert(who, locks);
+		<Locks<T>>::insert(asset_id, who, &locks);
 	}
 
-	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
+	fn remove_lock(
+		asset_id: &T::AssetId,
+		id: LockIdentifier,
+		who: &T::AccountId
+	) {
 		let now = <system::Module<T>>::block_number();
-		let locks = <Module<T>>::locks(who)
+		let locks = <Module<T>>::locks(asset_id, who)
 			.into_iter()
 			.filter_map(|l| if l.until > now && l.id != id { Some(l) } else { None })
 			.collect::<Vec<_>>();
-		<Locks<T>>::insert(who, locks);
+		<Locks<T>>::insert(asset_id, who, &locks);
 	}
 }
 
@@ -886,19 +872,11 @@ where
 	}
 }
 
-pub struct StakingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
-
-impl<T: Trait> AssetIdProvider for StakingAssetIdProvider<T> {
-	type AssetId = T::AssetId;
-	fn asset_id() -> Self::AssetId {
-		<Module<T>>::staking_asset_id()
-	}
-}
-
-impl<T> LockableCurrency<T::AccountId> for AssetCurrency<T, StakingAssetIdProvider<T>>
+impl<T, U> LockableCurrency<T::AccountId> for AssetCurrency<T, U>
 where
 	T: Trait,
 	T::Balance: MaybeSerializeDebug,
+	U: AssetIdProvider<AssetId = T::AssetId>,
 {
 	type Moment = T::BlockNumber;
 
@@ -909,7 +887,7 @@ where
 		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		<Module<T>>::set_lock(id, who, amount, until, reasons)
+		<Module<T>>::set_lock(&U::asset_id(), id, who, amount, until, reasons)
 	}
 
 	fn extend_lock(
@@ -919,29 +897,20 @@ where
 		until: T::BlockNumber,
 		reasons: WithdrawReasons,
 	) {
-		<Module<T>>::extend_lock(id, who, amount, until, reasons)
+		<Module<T>>::extend_lock(&U::asset_id(), id, who, amount, until, reasons)
 	}
 
 	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
-		<Module<T>>::remove_lock(id, who)
+		<Module<T>>::remove_lock(&U::asset_id(), id, who)
 	}
 }
 
-pub struct SpendingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
+pub struct EnergyAssetIdProvider<T>(rstd::marker::PhantomData<T>);
 
-impl<T: Trait> AssetIdProvider for SpendingAssetIdProvider<T> {
+impl<T: Trait> AssetIdProvider for EnergyAssetIdProvider<T> {
 	type AssetId = T::AssetId;
 	fn asset_id() -> Self::AssetId {
-		<Module<T>>::spending_asset_id()
-	}
-}
-
-pub struct FeedingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
-
-impl<T: Trait> AssetIdProvider for FeedingAssetIdProvider<T> {
-	type AssetId = T::AssetId;
-	fn asset_id() -> Self::AssetId {
-		<Module<T>>::feeding_asset_id()
+		<Module<T>>::energy_asset_id()
 	}
 }
 
@@ -954,7 +923,5 @@ impl<T: Trait> AssetIdProvider for ClaimingAssetIdProvider<T> {
 	}
 }
 
-pub type StakingAssetCurrency<T> = AssetCurrency<T, StakingAssetIdProvider<T>>;
-pub type SpendingAssetCurrency<T> = AssetCurrency<T, SpendingAssetIdProvider<T>>;
-pub type FeedingAssetCurrency<T> = AssetCurrency<T, FeedingAssetIdProvider<T>>;
+pub type EnergyAssetCurrency<T> = AssetCurrency<T, EnergyAssetIdProvider<T>>;
 pub type ClaimingAssetCurrency<T> = AssetCurrency<T, ClaimingAssetIdProvider<T>>;
