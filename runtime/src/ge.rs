@@ -12,16 +12,18 @@ pub trait Trait: system::Trait + balances::Trait + timestamp::Trait {
   /// The overarching event type.
   type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
   type GeId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
+  type ContentHash: Parameter + Member + Default + Copy;
 }
 
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
 #[derive(Encode, Decode)]
-pub struct GovernanceEntity<Balance, Moment> {
+pub struct GovernanceEntity<Balance, Moment, ContentHash> {
   threshold: u64,
   pub min_deposit: Balance,
   pub apply_stage_len: Moment,
   pub commit_stage_len: Moment,
+  pub content_hash: ContentHash,
   // rules
   // threshold for ge, tcx, time
 }
@@ -30,7 +32,7 @@ pub struct GovernanceEntity<Balance, Moment> {
 decl_storage! {
   trait Store for Module<T: Trait> as Ge {
 
-    GovernanceEntities get(governance_entity): map T::GeId => Option<GovernanceEntity<T::Balance, T::Moment>>;
+    GovernanceEntities get(governance_entity): map T::GeId => Option<GovernanceEntity<T::Balance, T::Moment, T::ContentHash>>;
     GovernanceEntitiesCount get(governance_entities_count): T::GeId;
 
     // Stake: which, amount
@@ -52,7 +54,7 @@ decl_module! {
     fn deposit_event() = default;
     
     // create ge with rules
-    pub fn create(origin) -> Result {
+    pub fn create(origin, content_hash: T::ContentHash) -> Result {
       let who = ensure_signed(origin)?;
       let count = Self::governance_entities_count();
       
@@ -65,17 +67,18 @@ decl_module! {
       let temp: Option<T::Balance> = balance.try_into().ok();
       let balance = temp.ok_or("Cannot convert to balance")?;
 
-      let new_governance_entity = GovernanceEntity::<T::Balance, T::Moment> {
+      let new_governance_entity = GovernanceEntity::<T::Balance, T::Moment, T::ContentHash> {
         threshold: 0,
         min_deposit: <T::Balance>::from(3000),
         apply_stage_len: T::Moment::from(60000),
         commit_stage_len: T::Moment::from(60000),
+        content_hash: content_hash,
       };
 
       <GovernanceEntities<T>>::insert(new_count, new_governance_entity);
       <GovernanceEntitiesCount<T>>::put(new_count);
 
-      Self::deposit_event(RawEvent::Created(who, new_count, balance));
+      Self::deposit_event(RawEvent::Created(who, new_count, balance, content_hash));
 
       Ok(())
     }
@@ -159,8 +162,9 @@ decl_event!(
     AccountId = <T as system::Trait>::AccountId,
     <T as Trait>::GeId,
     Balance = <T as balances::Trait>::Balance,
+    ContentHash = <T as Trait>::ContentHash,
   {
-    Created(AccountId, GeId, Balance),
+    Created(AccountId, GeId, Balance, ContentHash),
     Staked(AccountId, GeId, Balance),
     Invested(AccountId,GeId, Balance),
   }

@@ -1,5 +1,5 @@
 use support::{decl_module, decl_storage, decl_event, StorageValue, StorageMap, dispatch::Result, Parameter, ensure};
-use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedConversion, SaturatedConversion};
+use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedMul};
 use system::ensure_signed;
 use codec::{Encode, Decode};
 use rstd::{cmp, result, convert::{TryInto}};
@@ -16,13 +16,13 @@ pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + ge::Trait 
   type ListingId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type ContentHash: Parameter + Member + Default + Copy;
-  // type Quota: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
 }
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
 #[derive(Encode, Decode)]
-pub struct Tcx<TcxType> {
+pub struct Tcx<TcxType, ContentHash> {
   pub tcx_type: TcxType,
+  pub content_hash: ContentHash,
 }
 
 
@@ -33,7 +33,7 @@ ChallengeId, AccountId> {
   id: ListingId,
   node_id: ContentHash,
   amount: Balance,
-  quota: u128,
+  quota: Balance,
   application_expiry: Moment,
   whitelisted: bool,
   challenge_id: ChallengeId,
@@ -44,7 +44,7 @@ ChallengeId, AccountId> {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Challenge<Balance, Moment, AccountId, TcxId> {
   amount: Balance,
-  quota: u128,
+  quota: Balance,
   voting_ends: Moment,
   resolved: bool,
   reward_pool: Balance,
@@ -58,7 +58,7 @@ pub struct Challenge<Balance, Moment, AccountId, TcxId> {
 pub struct Vote<Balance> {
   value: bool,
   amount: Balance,
-  quota: u128,
+  quota: Balance,
   claimed: bool,
 }
 
@@ -66,16 +66,16 @@ pub struct Vote<Balance> {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Poll<Balance> {
   votes_for: Balance,
-  quota_for: u128,
+  quota_for: Balance,
   votes_against: Balance,
-  quota_against: u128,
+  quota_against: Balance,
   passed: bool,
 }
 
 // This module's storage items.
 decl_storage! {
   trait Store for Module<T: Trait> as Tcx {
-    AllTcxsArray get(tcx): map T::TcxId => Option<Tcx<T::TcxType>>;
+    AllTcxsArray get(tcx): map T::TcxId => Option<Tcx<T::TcxType, <T as Trait>::ContentHash>>;
     AllTcxsCount get(all_tcxs_count): T::TcxId;
 
     TcxOwner get(owner_of): map T::TcxId => Option<T::GeId>;
@@ -84,9 +84,9 @@ decl_storage! {
     OwnedTcxsCount get(owned_tcxs_count): map T::GeId => T::TcxId;
 
     // actual tcx
-    TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, T::ContentHash) => Listing<T::ListingId, T::ContentHash, T::Balance, T::Moment, T::ChallengeId, T::AccountId>;
+    TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, <T as Trait>::ContentHash) => Listing<T::ListingId, <T as Trait>::ContentHash, T::Balance, T::Moment, T::ChallengeId, T::AccountId>;
     TcxListingsCount get(listing_count_of_tcx): map T::TcxId => T::ListingId;
-    TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => T::ContentHash;
+    TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => <T as Trait>::ContentHash;
 
     Challenges get(challenges): map T::ChallengeId => Challenge<T::Balance, T::Moment, T::AccountId, T::TcxId>;
     Votes get(votes): map (T::ChallengeId, T::AccountId) => Vote<T::Balance>;
@@ -105,7 +105,9 @@ decl_module! {
     fn deposit_event() = default;
 
     // TODO: check if node exists
-    pub fn propose(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: T::Balance, action_id: T::ActionId) -> Result {
+    pub fn propose(origin, tcx_id: T::TcxId, node_id: <T as Trait>::ContentHash, amount: T::Balance, 
+    action_id: T::ActionId) -> Result {
+      
       let who = ensure_signed(origin)?;
 
       // only member of ge can propose
@@ -160,7 +162,7 @@ decl_module! {
     }
 
     // TODO: node_id or listing_id; prevent multiple challenge
-    pub fn challenge(origin, tcx_id: T::TcxId, node_id: T::ContentHash, amount: T::Balance) -> Result {
+    pub fn challenge(origin, tcx_id: T::TcxId, node_id: <T as Trait>::ContentHash, amount: T::Balance) -> Result {
       let who = ensure_signed(origin)?;
 
       let ge_id = Self::owner_of(tcx_id).ok_or("TCX does not exist / TCX owner does not exist")?;
@@ -285,7 +287,7 @@ decl_module! {
       Ok(())
     }
 
-    pub fn resolve(origin, tcx_id: T::TcxId, node_id: T::ContentHash) -> Result {
+    pub fn resolve(origin, tcx_id: T::TcxId, node_id: <T as Trait>::ContentHash) -> Result {
       ensure!(<TcxListings<T>>::exists((tcx_id,node_id)), "Listing not found");
 
       let listing = Self::listing_of_tcr_by_node_id((tcx_id,node_id));
@@ -389,11 +391,11 @@ decl_module! {
     }
 
     // create tcr: for testing purposes only
-    pub fn propose_tcx_creation(origin, ge_id: T::GeId, tcx_type: T::TcxType) -> Result {
+    pub fn propose_tcx_creation(origin, ge_id: T::GeId, tcx_type: T::TcxType, content_hash: <T as Trait>::ContentHash) -> Result {
       // TODO: check if ge agrees
       let governance_entity = <ge::Module<T>>::governance_entity(ge_id).ok_or("GE does not exist")?;
 
-      let tcx_id = Self::create(ge_id, tcx_type)?;
+      let tcx_id = Self::create(ge_id, tcx_type, content_hash)?;
 
       Ok(())
     }
@@ -411,7 +413,7 @@ decl_event!(
     Balance = <T as balances::Trait>::Balance,
     ChallengeId = <T as Trait>::ChallengeId,
     GeId = <T as ge::Trait>::GeId,
-    Quota = u128,
+    Quota = <T as balances::Trait>::Balance,
   {
     /// (AccountId, TcxId, ContentHash, Balance, Quota, ActionId)
     Proposed(AccountId, TcxId, ContentHash, Balance, Quota, ActionId),
@@ -423,12 +425,12 @@ decl_event!(
     Accepted(TcxId, ContentHash),
     Rejected(TcxId, ContentHash),
     Claimed(AccountId, ChallengeId),
-    Created(GeId, TcxId, TcxType),
+    Created(GeId, TcxId, TcxType, ContentHash),
   }
 );
 
 impl<T: Trait> Module<T> {
-  pub fn create(ge_id: T::GeId, tcx_type: T::TcxType) -> rstd::result::Result<T::TcxId, &'static str> {
+  pub fn create(ge_id: T::GeId, tcx_type: T::TcxType, content_hash: <T as Trait>::ContentHash) -> rstd::result::Result<T::TcxId, &'static str> {
     let one = T::TcxId::from(1 as u32);
 
     // check global tcx count
@@ -441,6 +443,7 @@ impl<T: Trait> Module<T> {
 
     let tcx  =  Tcx {
       tcx_type: tcx_type,
+      content_hash: content_hash,
     };
     <AllTcxsArray<T>>::insert(new_all_tcxs_count, tcx);
     <AllTcxsCount<T>>::put(new_all_tcxs_count);
@@ -450,23 +453,21 @@ impl<T: Trait> Module<T> {
     <OwnedTcxsArray<T>>::insert((ge_id, new_owned_tcxs_count), new_all_tcxs_count);
     <OwnedTcxsCount<T>>::insert(ge_id, new_owned_tcxs_count);
     
-    Self::deposit_event(RawEvent::Created(ge_id, new_all_tcxs_count, tcx_type));
+    Self::deposit_event(RawEvent::Created(ge_id, new_all_tcxs_count, tcx_type, content_hash));
     // return new tcx_id
     Ok(new_all_tcxs_count)
   }
 
-  pub fn calculate_quota(who: T::AccountId, ge_id: T::GeId, amount: T::Balance) -> result::Result<u128, &'static str> {
+  pub fn calculate_quota(who: T::AccountId, ge_id: T::GeId, amount: T::Balance) -> result::Result<T::Balance, &'static str> {
     // calculate propose quota
-    let mut quota: u128 = 0;
     let invested = <ge::Module<T>>::invested_amount((ge_id, who.clone()));
-    let min: u128 = cmp::min(invested, amount).saturated_into::<u128>();
-    quota = 20 * min;
+    let min = cmp::min(invested, amount);
+    let factor = T::Balance::from(20);
+    let quota = min.checked_mul(&factor).ok_or("Overflow calculating A shares.")?;
     let staked = <ge::Module<T>>::staked_amount((ge_id, who.clone()));
     let max = cmp::max(<T::Balance>::from(0), amount-invested);
-    let max = cmp::max(max, staked).saturated_into::<u128>();
-    quota = quota + max;
-    // let temp: Option<T::Balance> = quota.try_into().ok();
-    // let quota = temp.ok_or("Cannot convert to balance")?;
+    let max = cmp::max(max, staked);
+    let quota = quota.checked_add(&max).ok_or("Overflow calculating B shares.")?;
     Ok(quota)
   }
 }
