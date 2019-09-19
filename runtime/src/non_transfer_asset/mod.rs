@@ -94,6 +94,9 @@ decl_storage! {
 
 		/// The identity of the asset which is the one that is designated for the chain's transaction energy
 		pub EnergyAssetId get(energy_asset_id) config(): T::AssetId;
+		
+		/// The identity of the asset which is the one that is designated for the chain's activity system.
+		pub ActivityAssetId get(acitvity_asset_id) config(): T::AssetId;
 
 		/// The identity of the asset which is the one that is designated for the chain's encouraging system.
 		pub ClaimingAssetId get(claiming_asset_id) config(): T::AssetId;
@@ -914,6 +917,15 @@ impl<T: Trait> AssetIdProvider for EnergyAssetIdProvider<T> {
 	}
 }
 
+pub struct ActivityAssetIdProvider<T>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> AssetIdProvider for ActivityAssetIdProvider<T> {
+	type AssetId = T::AssetId;
+	fn asset_id() -> Self::AssetId {
+		<Module<T>>::acitvity_asset_id()
+	}
+}
+
 pub struct ClaimingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
 
 impl<T: Trait> AssetIdProvider for ClaimingAssetIdProvider<T> {
@@ -924,4 +936,5 @@ impl<T: Trait> AssetIdProvider for ClaimingAssetIdProvider<T> {
 }
 
 pub type EnergyAssetCurrency<T> = AssetCurrency<T, EnergyAssetIdProvider<T>>;
+pub type ActivityAssetCurrency<T> = AssetCurrency<T, ActivityAssetIdProvider<T>>;
 pub type ClaimingAssetCurrency<T> = AssetCurrency<T, ClaimingAssetIdProvider<T>>;

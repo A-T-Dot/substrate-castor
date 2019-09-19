@@ -63,7 +63,7 @@ pub type DigestItem = generic::DigestItem<Hash>;
 
 /// Used for castor.network modules
 mod non_transfer_asset;
-mod energy;
+mod activity;
 mod tcx;
 mod ge;
 mod node;
@@ -236,7 +236,7 @@ impl balances::Trait for Runtime {
 	/// What to do if an account's free balance gets zeroed.
 	type OnFreeBalanceZero = ();
 	/// What to do if a new account is created.
-	type OnNewAccount = Indices;
+	type OnNewAccount = (Indices);
 	/// The ubiquitous event type.
 	type Event = Event;
 	type TransactionPayment = ();
