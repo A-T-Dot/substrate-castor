@@ -37,10 +37,13 @@ pub trait Trait: system::Trait {
 	type Currency: ReservableCurrency<Self::AccountId>;
 
 	/// Energy type for this module
-	type Energy: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+	type EnergyCurrency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
 	/// Action point type for this module
-	type ActionPoint: Currency<Self::AccountId>;
+	type ActivityCurrency: Currency<Self::AccountId>;
+
+	/// Reputation point type for this module
+	type ReputationCurrency: Currency<Self::AccountId>;
 
 	/// Gives a chance to clean up resources associated with the given account.
 	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
@@ -62,25 +65,40 @@ pub trait Trait: system::Trait {
 
 	/// Convert a weight value into a deductible fee based on the currency type.
 	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
+
+	/// Convert a fee value to energy point	
+	type FeeToEnergy: Convert<BalanceOf<Self>, EnergyOf<Self>>;
 }
 
+// type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
+// Balance zone
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
-type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
+// Energy zone
+pub type EnergyOf<T> = <<T as Trait>::EnergyCurrency as Currency<<T as system::Trait>::AccountId>>::Balance;
+// Action zone
+pub type ActionPointOf<T> = <<T as Trait>::ActivityCurrency as Currency<<T as system::Trait>::AccountId>>::Balance;
+// Reputation zone
+pub type ReputationOf<T> = <<T as Trait>::ReputationCurrency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 // This module's storage items.
 decl_storage! {
-	trait Store for Module<T: Trait> as EnergyStorage {
-		// TODO
+	trait Store for Module<T: Trait> as Activities {
+		/// Map from all extend
+		pub Charged get(charged): map T::AccountId => Option<BalanceOf<T>>
 	}
 }
 
 decl_event!(
 	pub enum Event<T> where
-    AccountId = <T as system::Trait>::AccountId
+    AccountId = <T as system::Trait>::AccountId,
+		ActionPoint = ActionPointOf<T>,
+		Reputation = ReputationOf<T>
   {
-		SomethingStored(u32, AccountId),
+		ActivityReward(AccountId, ActionPoint),
+		ReputationReward(AccountId, Reputation),
+		ReputationSlash(AccountId, Reputation),
 	}
 );
 
@@ -90,19 +108,44 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// Initializing events
 		fn deposit_event() = default;
-
-		// pub fn 
+		
+		/// Bond to increase Energy
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn charge(
+			origin,
+			#[compact] value: BalanceOf<T>
+		) {
+			let who = ensure_signed(origin)?;
+			Self::charge_for_energy(&who, value)?;
+		}
+		
+		/// UnBond to decrease Energy
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn discharge(
+			origin,
+			#[compact] value: BalanceOf<T>
+		) {
+			let who = ensure_signed(origin)?;
+			Self::discharge_for_energy(&who, value)?;
+		}
 	}
 }
 
 // The module's main implement
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
+
 	// TODO
 
 	// PRIVATE MUTABLES
-	// TODO
 
+	fn charge_for_energy(who: &T::AccountId, value: BalanceOf<T>) -> Result {
+		Ok(())
+	}
+
+	fn discharge_for_energy(who: &T::AccountId, value: BalanceOf<T>) -> Result {
+		Ok(())
+	}
 }
 
 impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
