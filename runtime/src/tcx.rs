@@ -1,22 +1,35 @@
-use support::{decl_module, decl_storage, decl_event, StorageValue, StorageMap, dispatch::Result, Parameter, ensure};
-use sr_primitives::traits::{ Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedMul};
+use sr_primitives::traits::{
+  Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedMul
+};
+use support::{
+  decl_module, decl_storage, decl_event, ensure,
+  StorageValue, StorageMap, Parameter,
+  traits::{
+    Currency
+  },
+  dispatch::Result,
+};
 use system::ensure_signed;
 use codec::{Encode, Decode};
-use rstd::{cmp, result, convert::{TryInto}};
+use rstd::{cmp, result};
 use crate::ge;
 
 
 /// The module's configuration trait.
-pub trait Trait: system::Trait + balances::Trait + timestamp::Trait + ge::Trait  {
-  /// The overarching event type.
-  type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+pub trait Trait: system::Trait + timestamp::Trait + ge::Trait  {
   type TcxId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type TcxType: Parameter + Member + Default + Copy;
   type ActionId: Parameter + Member + Default + Copy;
   type ListingId:  Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
   type ContentHash: Parameter + Member + Default + Copy;
+
+  /// The overarching event type.
+  type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
+
+// Balance zone
+pub type BalanceOf<T> = <<T as ge::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 #[cfg_attr(feature ="std", derive(Debug, PartialEq, Eq))]
 #[derive(Encode, Decode)]
@@ -84,13 +97,13 @@ decl_storage! {
     OwnedTcxsCount get(owned_tcxs_count): map T::GeId => T::TcxId;
 
     // actual tcx
-    TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, <T as Trait>::ContentHash) => Listing<T::ListingId, <T as Trait>::ContentHash, T::Balance, T::Moment, T::ChallengeId, T::AccountId>;
+    TcxListings get(listing_of_tcr_by_node_id): map (T::TcxId, <T as Trait>::ContentHash) => Listing<T::ListingId, <T as Trait>::ContentHash, BalanceOf<T>, T::Moment, T::ChallengeId, T::AccountId>;
     TcxListingsCount get(listing_count_of_tcx): map T::TcxId => T::ListingId;
     TcxListingsIndexHash get(node_id_of_listing): map (T::TcxId, T::ListingId) => <T as Trait>::ContentHash;
 
-    Challenges get(challenges): map T::ChallengeId => Challenge<T::Balance, T::Moment, T::AccountId, T::TcxId>;
-    Votes get(votes): map (T::ChallengeId, T::AccountId) => Vote<T::Balance>;
-    Polls get(polls): map T::ChallengeId => Poll<T::Balance>;
+    Challenges get(challenges): map T::ChallengeId => Challenge<BalanceOf<T>, T::Moment, T::AccountId, T::TcxId>;
+    Votes get(votes): map (T::ChallengeId, T::AccountId) => Vote<BalanceOf<T>>;
+    Polls get(polls): map T::ChallengeId => Poll<BalanceOf<T>>;
 
     ChallengeNonce get(challenge_nonce): T::ChallengeId;
   }
@@ -105,7 +118,7 @@ decl_module! {
     fn deposit_event() = default;
 
     // TODO: check if node exists
-    pub fn propose(origin, tcx_id: T::TcxId, node_id: <T as Trait>::ContentHash, amount: T::Balance, 
+    pub fn propose(origin, tcx_id: T::TcxId, node_id: <T as Trait>::ContentHash, amount: BalanceOf<T>, 
     action_id: T::ActionId) -> Result {
       
       let who = ensure_signed(origin)?;
@@ -162,7 +175,7 @@ decl_module! {
     }
 
     // TODO: node_id or listing_id; prevent multiple challenge
-    pub fn challenge(origin, tcx_id: T::TcxId, node_id: <T as Trait>::ContentHash, amount: T::Balance) -> Result {
+    pub fn challenge(origin, tcx_id: T::TcxId, node_id: <T as Trait>::ContentHash, amount: BalanceOf<T>) -> Result {
       let who = ensure_signed(origin)?;
 
       let ge_id = Self::owner_of(tcx_id).ok_or("TCX does not exist / TCX owner does not exist")?;
@@ -195,8 +208,8 @@ decl_module! {
         quota: quota,
         voting_ends: voting_exp,
         resolved: false,
-        reward_pool: T::Balance::from(0),
-        total_tokens: T::Balance::from(0),
+        reward_pool: BalanceOf::<T>::from(0),
+        total_tokens: BalanceOf::<T>::from(0),
         owner: who.clone(),
         tcx_id
       };
@@ -233,7 +246,7 @@ decl_module! {
     }
 
       // TODO: prevent double votes, cannot vote on your own challenge?
-    pub fn vote(origin, challenge_id: T::ChallengeId, amount: T::Balance, value: bool) -> Result {
+    pub fn vote(origin, challenge_id: T::ChallengeId, amount: BalanceOf<T>, value: bool) -> Result {
       let who = ensure_signed(origin)?;
 
       // check if listing is challenged
@@ -406,14 +419,14 @@ decl_event!(
   pub enum Event<T> 
   where 
     AccountId = <T as system::Trait>::AccountId,
+    Balance = BalanceOf<T>,
     ContentHash = <T as Trait>::ContentHash,
     TcxId = <T as Trait>::TcxId,
     TcxType = <T as Trait>::TcxType,
     ActionId = <T as Trait>::ActionId,
-    Balance = <T as balances::Trait>::Balance,
     ChallengeId = <T as Trait>::ChallengeId,
     GeId = <T as ge::Trait>::GeId,
-    Quota = <T as balances::Trait>::Balance,
+    Quota = BalanceOf<T>,
   {
     /// (AccountId, TcxId, ContentHash, Balance, Quota, ActionId)
     Proposed(AccountId, TcxId, ContentHash, Balance, Quota, ActionId),
@@ -458,14 +471,14 @@ impl<T: Trait> Module<T> {
     Ok(new_all_tcxs_count)
   }
 
-  pub fn calculate_quota(who: T::AccountId, ge_id: T::GeId, amount: T::Balance) -> result::Result<T::Balance, &'static str> {
+  pub fn calculate_quota(who: T::AccountId, ge_id: T::GeId, amount: BalanceOf<T>) -> result::Result<BalanceOf<T>, &'static str> {
     // calculate propose quota
     let invested = <ge::Module<T>>::invested_amount((ge_id, who.clone()));
     let min = cmp::min(invested, amount);
-    let factor = T::Balance::from(20);
+    let factor = BalanceOf::<T>::from(20);
     let quota = min.checked_mul(&factor).ok_or("Overflow calculating A shares.")?;
     let staked = <ge::Module<T>>::staked_amount((ge_id, who.clone()));
-    let max = cmp::max(<T::Balance>::from(0), amount-invested);
+    let max = cmp::max(BalanceOf::<T>::from(0), amount-invested);
     let max = cmp::max(max, staked);
     let quota = quota.checked_add(&max).ok_or("Overflow calculating B shares.")?;
     Ok(quota)

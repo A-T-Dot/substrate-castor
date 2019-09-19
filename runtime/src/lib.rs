@@ -260,6 +260,15 @@ impl sudo::Trait for Runtime {
 type TcxType = u64;
 type ContentHash = [u8; 32];
 
+impl ge::Trait for Runtime {
+	type Currency = Balances;
+	type Event = Event;
+	type GeId = u64;
+	type ContentHash = ContentHash;
+	type Slash = (); // send the slashed funds to where?.
+	type Reward = (); // rewards are minted from the void
+}
+
 impl tcx::Trait for Runtime {
 	type Event = Event;
 	type TcxId = u64;
@@ -267,12 +276,6 @@ impl tcx::Trait for Runtime {
 	type ActionId = u64;
 	type ListingId = u64;
 	type ChallengeId = u64;
-	type ContentHash = ContentHash;
-}
-
-impl ge::Trait for Runtime {
-	type Event = Event;
-	type GeId = u64;
 	type ContentHash = ContentHash;
 }
 

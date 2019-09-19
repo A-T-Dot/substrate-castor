@@ -70,7 +70,6 @@ pub trait Trait: system::Trait {
 	type FeeToEnergy: Convert<BalanceOf<Self>, EnergyOf<Self>>;
 }
 
-// type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 // Balance zone
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
