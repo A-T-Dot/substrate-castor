@@ -21,7 +21,7 @@ use support::{
 	},
 	Parameter, StorageDoubleMap, StorageMap, StorageValue,
 };
-use system::{ensure_signed, ensure_root};
+use system::{ensure_root};
 
 // test mod
 // mod mock;
@@ -222,80 +222,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// try remove asset
-	fn on_asset_under_zero (asset_id: &T::AssetId, who: &T::AccountId) {
-		let dust = <FreeBalance<T>>::remove(asset_id, who);
+	fn on_asset_under_zero (asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
+		let dust = <FreeBalance<T>>::take(asset_id, who);
 		<Locks<T>>::remove(asset_id, who);
 
 		if Self::reserved_balance(asset_id, who).is_zero() {
 			Self::do_asset_deactivate(asset_id, who);
 		}
-	}
-
-	/// Mint account's amount
-	///
-	/// # Arguments
-	/// * `asset_id`: An ID of a reserved asset.
-	/// * `to`: The initiator account of this call
-	/// * `amount`: Balance
-	///
-	fn make_mint(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::check_mint(asset_id, to, amount)?;
-		Self::do_mint(asset_id, to, amount);
-
-		Ok(())
-	}
-	fn check_mint(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::free_balance(asset_id, to).checked_add(&amount)
-			.ok_or("free balance got overflow after minting.")?;
-
-		<TotalIssuance<T>>::get(asset_id).checked_add(&amount)
-			.ok_or("total_issuance got overflow after minting.")?;
-
-		Ok(())
-	}
-	/// check outside
-	fn do_mint(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) {
-		if !<FreeBalance<T>>::exists(asset_id, to) {
-			Self::do_asset_activate(asset_id, to, amount);
-		}
-		<TotalIssuance<T>>::mutate(asset_id, |issued| *issued += amount);
-		<FreeBalance<T>>::mutate(asset_id, to, |balance| *balance += amount);
-
-		// send event
-		Self::deposit_event(RawEvent::Minted(*asset_id, to.clone(), amount));
-	}
-
-	/// Burn account's amount
-	///
-	/// # Arguments
-	/// * `asset_id`: An ID of a reserved asset.
-	/// * `to`: The initiator account of this call
-	/// * `amount`: burn amount
-	///
-	fn make_burn(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::check_burn(asset_id, to, amount)?;
-		Self::do_burn(asset_id, to, amount);
-
-		Ok(())
-	}
-	fn check_burn(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::free_balance(&asset_id, &to).checked_sub(&amount)
-			.ok_or("free_balance got underflow after burning")?;
-
-		<TotalIssuance<T>>::get(asset_id).checked_sub(&amount)
-			.ok_or("total_issuance got underflow after burning")?;
-
-		Ok(())
-	}
-	fn do_burn(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) {
-		<TotalIssuance<T>>::mutate(asset_id, |issued| *issued -= amount);
-		<FreeBalance<T>>::mutate(asset_id, to, |balance| *balance -= amount);
-		
-		if Self::free_balance(&asset_id, &to) <= T::Balance::zero() {
-			Self::on_asset_under_zero(asset_id, to);
-		}
-		// send event
-		Self::deposit_event(RawEvent::Burned(*asset_id, to.clone(), amount));
+		dust
 	}
 
 	/// Move `amount` from free balance to reserved balance.
@@ -774,7 +708,8 @@ where
 		Zero::zero()
 	}
 
-	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, value: Self::Balance) -> Result {
+	
+	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, _value: Self::Balance) -> Result {
 		ensure!(transactor == dest, "transfer is not supported.");
 		Ok(())
 	}
@@ -799,7 +734,15 @@ where
 			.ok_or_else(|| "account has too few funds")?;
 		Self::ensure_can_withdraw(who, value, reason, new_balance)?;
 		<Module<T>>::set_free_balance(&U::asset_id(), who, new_balance);
-		Ok(NegativeImbalance::new(value))
+		// try unset
+		let mut dust = T::Balance::zero();
+		if new_balance <= dust {
+			dust = <Module<T>>::on_asset_under_zero(&U::asset_id(), who);
+		}
+		let final_value = dust + value;
+		// send event: non transfer just burn now
+		<Module<T>>::deposit_event(RawEvent::Burned(U::asset_id(), who.clone(), final_value));
+		Ok(NegativeImbalance::new(final_value))
 	}
 
 	fn deposit_into_existing(
@@ -811,7 +754,13 @@ where
 	}
 
 	fn deposit_creating(who: &T::AccountId, value: Self::Balance) -> Self::PositiveImbalance {
+		let original = <Module<T>>::free_balance(&U::asset_id(), who);
+		if original == Self::Balance::zero() {
+			<Module<T>>::do_asset_activate(&U::asset_id(), who, value);
+		}
 		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who) + value);
+		// send event: non transfer just mint now
+		<Module<T>>::deposit_event(RawEvent::Minted(U::asset_id(), who.clone(), value));
 		if let SignedImbalance::Positive(p) = imbalance {
 			p
 		} else {
