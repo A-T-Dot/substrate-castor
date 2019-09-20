@@ -255,10 +255,17 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-/// Used for castor.network
+// Used for castor.network
 
+type AssetId = u32;
 type TcxType = u64;
 type ContentHash = [u8; 32];
+
+impl non_transfer_asset::Trait for Runtime {
+	type Balance = Balance;
+	type AssetId = AssetId;
+	type Event = Event;
+}
 
 impl ge::Trait for Runtime {
 	type Currency = Balances;
@@ -299,6 +306,7 @@ construct_runtime!(
 		Balances: balances::{default, Error},
 		Sudo: sudo,
 		// Used for castor.network
+		NonTransferAssets: non_transfer_asset::{default},
 		Tcx: tcx::{Module, Call, Storage, Event<T>},
 		Ge: ge::{Module, Call, Storage, Event<T>},
 		Node: node::{Module, Call, Storage, Event<T>},
