@@ -30,9 +30,6 @@ use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait {
-	/// Time used for computing
-	type Time: Time;
-
 	/// Currency type for this module.
 	type Currency: ReservableCurrency<Self::AccountId>;
 
@@ -44,12 +41,6 @@ pub trait Trait: system::Trait {
 
 	/// Reputation point type for this module
 	type ReputationCurrency: Currency<Self::AccountId>;
-
-	/// Gives a chance to clean up resources associated with the given account.
-	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
-
-	/// Handler for when a new account is created.
-	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when taking transaction fees.
 	type TransactionPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -92,9 +83,12 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where
     AccountId = <T as system::Trait>::AccountId,
+		Balance = BalanceOf<T>,
+		Energy = EnergyOf<T>,
 		ActionPoint = ActionPointOf<T>,
 		Reputation = ReputationOf<T>
   {
+		FeePayed(AccountId, Energy, Balance),
 		ActivityReward(AccountId, ActionPoint),
 		ReputationReward(AccountId, Reputation),
 		ReputationSlash(AccountId, Reputation),
@@ -137,7 +131,6 @@ impl<T: Trait> Module<T> {
 	// TODO
 
 	// PRIVATE MUTABLES
-
 	fn charge_for_energy(who: &T::AccountId, value: BalanceOf<T>) -> Result {
 		Ok(())
 	}
@@ -151,6 +144,12 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 	// Implementation of the config type managing the creation of new accounts.
 	fn on_new_account(who: &T::AccountId) {
 		// TODO
+	}
+}
+
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
+	fn on_free_balance_zero(who: &T::AccountId) {
+		// TOdo
 	}
 }
 

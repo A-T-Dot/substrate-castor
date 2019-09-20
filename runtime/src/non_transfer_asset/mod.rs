@@ -121,6 +121,10 @@ decl_event!(
 	{
 		/// Asset created (asset_id, creator, asset_options).
 		Created(AssetId, AccountId, AssetOptions),
+		/// Asset of a account was activated (asset_id, who, initial balance)
+		Activated(AssetId, AccountId, Balance),
+		/// Asset of a account was reaped (asset_id, who)
+		Deactivated(AssetId, AccountId),
 		/// New asset minted (asset_id, account, amount).
 		Minted(AssetId, AccountId, Balance),
 		/// Asset burned (asset_id, account, amount).
@@ -144,6 +148,23 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
 
+	/// Get an account's total balance of an asset kind.
+	pub fn total_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
+		Self::free_balance(asset_id, who) + Self::reserved_balance(asset_id, who)
+	}
+
+	/// Get an account's free balance of an asset kind.
+	pub fn free_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
+		<FreeBalance<T>>::get(asset_id, who)
+	}
+
+	/// Get an account's reserved balance of an asset kind.
+	pub fn reserved_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
+		<ReservedBalance<T>>::get(asset_id, who)
+	}
+
+	// MUTABLES (DANGEROUS)
+
 	/// Creates an asset.
 	///
 	/// # Arguments
@@ -152,7 +173,7 @@ impl<T: Trait> Module<T> {
 	/// * `from_account`: The initiator account of this call
 	/// * `asset_options`: Asset creation options.
 	///
-	pub fn create_asset(
+	fn create_asset(
 		asset_id: Option<T::AssetId>,
 		from_account: Option<T::AccountId>,
 		options: AssetOptions<T::Balance>,
@@ -190,6 +211,26 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Created(asset_id, account_id, options));
 	}
 
+	/// activate asset
+	fn do_asset_activate(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) {
+		Self::deposit_event(RawEvent::Activated(*asset_id, who.clone(), amount.clone()));
+	}
+
+	/// deactivate asset
+	fn do_asset_deactivate(asset_id: &T::AssetId, who: &T::AccountId) {
+		Self::deposit_event(RawEvent::Deactivated(*asset_id, who.clone()));
+	}
+
+	/// try remove asset
+	fn on_asset_under_zero (asset_id: &T::AssetId, who: &T::AccountId) {
+		let dust = <FreeBalance<T>>::remove(asset_id, who);
+		<Locks<T>>::remove(asset_id, who);
+
+		if Self::reserved_balance(asset_id, who).is_zero() {
+			Self::do_asset_deactivate(asset_id, who);
+		}
+	}
+
 	/// Mint account's amount
 	///
 	/// # Arguments
@@ -197,7 +238,7 @@ impl<T: Trait> Module<T> {
 	/// * `to`: The initiator account of this call
 	/// * `amount`: Balance
 	///
-	pub fn make_mint(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
+	fn make_mint(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
 		Self::check_mint(asset_id, to, amount)?;
 		Self::do_mint(asset_id, to, amount);
 
@@ -214,6 +255,9 @@ impl<T: Trait> Module<T> {
 	}
 	/// check outside
 	fn do_mint(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) {
+		if !<FreeBalance<T>>::exists(asset_id, to) {
+			Self::do_asset_activate(asset_id, to, amount);
+		}
 		<TotalIssuance<T>>::mutate(asset_id, |issued| *issued += amount);
 		<FreeBalance<T>>::mutate(asset_id, to, |balance| *balance += amount);
 
@@ -228,7 +272,7 @@ impl<T: Trait> Module<T> {
 	/// * `to`: The initiator account of this call
 	/// * `amount`: burn amount
 	///
-	pub fn make_burn(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
+	fn make_burn(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
 		Self::check_burn(asset_id, to, amount)?;
 		Self::do_burn(asset_id, to, amount);
 
@@ -246,25 +290,19 @@ impl<T: Trait> Module<T> {
 	fn do_burn(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) {
 		<TotalIssuance<T>>::mutate(asset_id, |issued| *issued -= amount);
 		<FreeBalance<T>>::mutate(asset_id, to, |balance| *balance -= amount);
+		
+		if Self::free_balance(&asset_id, &to) <= T::Balance::zero() {
+			Self::on_asset_under_zero(asset_id, to);
+		}
 		// send event
 		Self::deposit_event(RawEvent::Burned(*asset_id, to.clone(), amount));
-	}
-
-	/// Get an account's free balance of an asset kind.
-	pub fn free_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
-		<FreeBalance<T>>::get(asset_id, who)
-	}
-
-	/// Get an account's reserved balance of an asset kind.
-	pub fn reserved_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
-		<ReservedBalance<T>>::get(asset_id, who)
 	}
 
 	/// Move `amount` from free balance to reserved balance.
 	///
 	/// If the free balance is lower than `amount`, then no funds will be moved and an `Err` will
 	/// be returned. This is different behavior than `unreserve`.
-	pub fn reserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Result {
+	fn reserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Result {
 		// Do we need to consider that this is an atomic transaction?
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let original_free_balance = Self::free_balance(asset_id, who);
@@ -283,7 +321,7 @@ impl<T: Trait> Module<T> {
 	/// As many assets up to `amount` will be moved as possible. If the reserve balance of `who`
 	/// is less than `amount`, then the remaining amount will be returned.
 	/// NOTE: This is different behavior than `reserve`.
-	pub fn unreserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> T::Balance {
+	fn unreserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> T::Balance {
 		let b = Self::reserved_balance(asset_id, who);
 		let actual = rstd::cmp::min(b, amount);
 		let original_free_balance = Self::free_balance(asset_id, who);
@@ -363,7 +401,7 @@ impl<T: Trait> Module<T> {
 	/// for the given reason.
 	///
 	/// `Err(...)` with the reason why not otherwise.
-	pub fn ensure_can_withdraw(
+	fn ensure_can_withdraw(
 		asset_id: &T::AssetId,
 		who: &T::AccountId,
 		_amount: T::Balance,
