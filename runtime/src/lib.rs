@@ -63,7 +63,7 @@ pub type DigestItem = generic::DigestItem<Hash>;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{FeeToEnergy};
+use impls::{FeeToEnergy, ChargingToEnergy};
 
 /// Used for castor.network modules
 mod non_transfer_asset;
@@ -227,11 +227,11 @@ impl timestamp::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 500;
-	pub const TransferFee: u128 = 0;
-	pub const CreationFee: u128 = 0;
-	pub const TransactionBaseFee: u128 = 0;
-	pub const TransactionByteFee: u128 = 1;
+	pub const ExistentialDeposit: u128 = 100_000;
+	pub const TransferFee: u128 = 100_000;
+	pub const CreationFee: u128 = 100_000;
+	pub const TransactionBaseFee: u128 = 10_000;
+	pub const TransactionByteFee: u128 = 100;
 }
 
 impl balances::Trait for Runtime {
@@ -271,6 +271,10 @@ impl non_transfer_asset::Trait for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const EnergyBaseAmount: u128 = 1_000_000;
+}
+
 impl activity::Trait for Runtime {
 	type Currency = Balances;
 	type EnergyCurrency = non_transfer_asset::EnergyAssetCurrency<Runtime>;
@@ -280,8 +284,10 @@ impl activity::Trait for Runtime {
 	type Event = Event;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
+	type EnergyBaseAmount = EnergyBaseAmount;
 	type WeightToFee = ConvertInto;
 	type FeeToEnergy = FeeToEnergy;
+	type ChargingToEnergy = ChargingToEnergy;
 }
 
 impl ge::Trait for Runtime {

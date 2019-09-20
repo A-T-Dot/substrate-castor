@@ -54,11 +54,17 @@ pub trait Trait: system::Trait {
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<BalanceOf<Self>>;
 
+	/// The base Energy amount of activated account
+	type EnergyBaseAmount: Get<EnergyOf<Self>>;
+
 	/// Convert a weight value into a deductible fee based on the currency type.
 	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
 
 	/// Convert a fee value to energy point	
 	type FeeToEnergy: Convert<BalanceOf<Self>, EnergyOf<Self>>;
+
+	/// Convert a charging value to energy point	
+	type ChargingToEnergy: Convert<BalanceOf<Self>, EnergyOf<Self>>;
 }
 
 // Balance zone
@@ -76,7 +82,9 @@ pub type ReputationOf<T> = <<T as Trait>::ReputationCurrency as Currency<<T as s
 decl_storage! {
 	trait Store for Module<T: Trait> as Activities {
 		/// Map from all extend
-		pub Charged get(charged): map T::AccountId => Option<BalanceOf<T>>
+		pub Charged get(charged): map T::AccountId => Option<BalanceOf<T>>;
+		/// Map for next energy unlock moment
+		pub NextEnergyUnlockMoment get(next_energy_unlock): map T::AccountId => Option<T::BlockNumber>;
 	}
 }
 
@@ -89,6 +97,9 @@ decl_event!(
 		Reputation = ReputationOf<T>
   {
 		FeePayed(AccountId, Energy, Balance),
+		EnergyRecovered(AccountId, Energy),
+		EnergyActivated(AccountId),
+		EnergyDeactivated(AccountId),
 		ActivityReward(AccountId, ActionPoint),
 		ReputationReward(AccountId, Reputation),
 		ReputationSlash(AccountId, Reputation),
@@ -143,7 +154,8 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 	// Implementation of the config type managing the creation of new accounts.
 	fn on_new_account(who: &T::AccountId) {
-		// TODO
+		T::EnergyCurrency::deposit_creating(who.clone(), T::EnergyBaseAmount::get());
+		Self::deposit_event(RawEvent::EnergyActivated(who));
 	}
 }
 
