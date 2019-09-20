@@ -169,7 +169,7 @@ decl_module! {
       <TcxListingsCount<T>>::insert(tcx_id, new_listing_count);
       <TcxListingsIndexHash<T>>::insert((tcx_id, new_listing_count), node_id);
 
-      Self::deposit_event(RawEvent::Proposed(who, tcx_id, node_id, amount, quota, action_id));
+      Self::deposit_event(RawEvent::Proposed(who, tcx_id, node_id, amount, quota, action_id, app_exp));
 
       Ok(())
     }
@@ -240,7 +240,7 @@ decl_module! {
 
       <ChallengeNonce<T>>::put(new_challenge_nonce);
 
-      Self::deposit_event(RawEvent::Challenged(who, new_challenge_nonce, tcx_id, node_id, amount, quota));
+      Self::deposit_event(RawEvent::Challenged(who, new_challenge_nonce, tcx_id, node_id, amount, quota, voting_exp));
 
       Ok(())
     }
@@ -427,11 +427,12 @@ decl_event!(
     ChallengeId = <T as Trait>::ChallengeId,
     GeId = <T as ge::Trait>::GeId,
     Quota = BalanceOf<T>,
+    Moment = <T as timestamp::Trait>::Moment
   {
     /// (AccountId, TcxId, ContentHash, Balance, Quota, ActionId)
-    Proposed(AccountId, TcxId, ContentHash, Balance, Quota, ActionId),
+    Proposed(AccountId, TcxId, ContentHash, Balance, Quota, ActionId, Moment),
     /// (AccountId, TcxId, ContentHash, Balance, Quota)
-    Challenged(AccountId, ChallengeId, TcxId, ContentHash, Balance, Quota),
+    Challenged(AccountId, ChallengeId, TcxId, ContentHash, Balance, Quota, Moment),
     /// (AccountId, ChallengeId, Balance, Quota, passed)
     Voted(AccountId, ChallengeId, Balance, Quota, bool),
     Resolved(ChallengeId),
