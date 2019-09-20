@@ -924,4 +924,4 @@ impl<T: Trait> AssetIdProvider for ReputationAssetIdProvider<T> {
 
 pub type EnergyAssetCurrency<T> = AssetCurrency<T, EnergyAssetIdProvider<T>>;
 pub type ActivityAssetCurrency<T> = AssetCurrency<T, ActivityAssetIdProvider<T>>;
-pub type ClaimingAssetCurrency<T> = AssetCurrency<T, ReputationAssetIdProvider<T>>;
+pub type ReputationAssetCurrency<T> = AssetCurrency<T, ReputationAssetIdProvider<T>>;

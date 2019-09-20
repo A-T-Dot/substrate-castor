@@ -61,6 +61,10 @@ pub type Hash = primitives::H256;
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
 
+/// Implementations of some helper traits passed into runtime modules as associated types.
+pub mod impls;
+use impls::{FeeToEnergy};
+
 /// Used for castor.network modules
 mod non_transfer_asset;
 mod activity;
@@ -267,6 +271,19 @@ impl non_transfer_asset::Trait for Runtime {
 	type Event = Event;
 }
 
+impl activity::Trait for Runtime {
+	type Currency = Balances;
+	type EnergyCurrency = non_transfer_asset::EnergyAssetCurrency<Runtime>;
+	type ActivityCurrency = non_transfer_asset::ActivityAssetCurrency<Runtime>;
+	type ReputationCurrency = non_transfer_asset::ReputationAssetCurrency<Runtime>;
+	type TransactionPayment = ();
+	type Event = Event;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = ConvertInto;
+	type FeeToEnergy = FeeToEnergy;
+}
+
 impl ge::Trait for Runtime {
 	type Currency = Balances;
 	type Event = Event;
@@ -307,6 +324,7 @@ construct_runtime!(
 		Sudo: sudo,
 		// Used for castor.network
 		NonTransferAssets: non_transfer_asset::{default},
+		Activities: activity::{Module, Call, Storage, Event<T>},
 		Tcx: tcx::{Module, Call, Storage, Event<T>},
 		Ge: ge::{Module, Call, Storage, Event<T>},
 		Node: node::{Module, Call, Storage, Event<T>},
