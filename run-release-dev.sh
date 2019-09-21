@@ -2,6 +2,6 @@
 
 set -e
 
-cargo run --release purge-chain -y
+cargo run --release -- purge-chain --dev -y
 
 cargo run --release -- --dev
