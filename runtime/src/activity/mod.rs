@@ -82,7 +82,7 @@ pub type ReputationOf<T> = <<T as Trait>::ReputationCurrency as Currency<<T as s
 decl_storage! {
 	trait Store for Module<T: Trait> as Activities {
 		/// Map from all extend
-		pub Charged get(charged): map T::AccountId => Option<BalanceOf<T>>;
+		pub Charged get(charged): map T::AccountId => BalanceOf<T>;
 		/// Map for next energy unlock moment
 		pub NextEnergyUnlockMoment get(next_energy_unlock): map T::AccountId => Option<T::BlockNumber>;
 	}
@@ -96,11 +96,15 @@ decl_event!(
 		ActionPoint = ActionPointOf<T>,
 		Reputation = ReputationOf<T>
   {
+		// Fee payment
 		FeePayed(AccountId, Energy, Balance),
-		EnergyRecovered(AccountId, Energy),
+		// Energy part
 		EnergyActivated(AccountId),
 		EnergyDeactivated(AccountId),
-		ActivityReward(AccountId, ActionPoint),
+		EnergyRecovered(AccountId, Energy),
+		// ActionPoint part
+		ActionPointReward(AccountId, ActionPoint),
+		// Reputation part
 		ReputationReward(AccountId, Reputation),
 		ReputationSlash(AccountId, Reputation),
 	}
@@ -143,10 +147,38 @@ impl<T: Trait> Module<T> {
 
 	// PRIVATE MUTABLES
 	fn charge_for_energy(who: &T::AccountId, value: BalanceOf<T>) -> Result {
+		// ensure reserve
+		if !T::Currency::can_reserve(who, value) {
+			return Err("not enough free funds");
+		}
+		// check current_charged
+		let current_charged = <Charged<T>>::get(who);
+		let new_charged = current_charged.checked_add(&value).ok_or("account has charged overflow")?;
+
+		let energy_to_charge = T::ChargingToEnergy::convert(value);
+		let current_energy = T::EnergyCurrency::free_balance(who);
+		current_energy.checked_add(&energy_to_charge).ok_or("Overflow energy amount")?;
+
+		// MUTABLES
+		T::Currency::reserve(who, value)?;
+		T::EnergyCurrency::deposit_into_existing(who, energy_to_charge)?;
+		<Charged<T>>::insert(who, new_charged);
 		Ok(())
 	}
 
 	fn discharge_for_energy(who: &T::AccountId, value: BalanceOf<T>) -> Result {
+		// check current_charged
+		let current_charged = <Charged<T>>::get(who);
+		let new_charged = current_charged.checked_sub(&value).ok_or("account has too few charged funds")?;
+		
+		let energy_to_discharge = T::ChargingToEnergy::convert(value);
+		let current_energy = T::EnergyCurrency::free_balance(who);
+		current_energy.checked_sub(&energy_to_discharge).ok_or("account has too few energy")?;
+
+		// MUTABLES
+		T::EnergyCurrency::withdraw(who, energy_to_discharge, WithdrawReason::Fee, ExistenceRequirement::KeepAlive)?;
+		T::Currency::unreserve(who, value);
+		<Charged<T>>::insert(who, new_charged);
 		Ok(())
 	}
 }
@@ -161,7 +193,11 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
-		// TODO clean Energy
+		let dust = <Charged<T>>::take(who);
+		if !dust.is_zero() {
+			T::Currency::unreserve(who, dust);
+		}
+		T::EnergyCurrency::slash(who, T::EnergyCurrency::total_balance(who));
 		Self::deposit_event(RawEvent::EnergyDeactivated(who.clone()));
 	}
 }
