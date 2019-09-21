@@ -13,7 +13,6 @@ use system::ensure_signed;
 use codec::{Encode, Decode};
 use rstd::{cmp, result, convert::{TryInto}};
 use crate::ge;
-use crate::impls;
 
 
 /// The module's configuration trait.
@@ -137,7 +136,7 @@ decl_module! {
       
       // TODO: deduction balace for application
       // <token::Module<T>>::lock(sender.clone(), deposit, hashed.clone())?;
-      ensure!(<T as self::Trait>::Currency::can_reserve(&who, amount), "not enough balances to propose");
+      // ensure!(<T as self::Trait>::Currency::can_reserve(&who, amount), "not enough balances to propose");
       <T as self::Trait>::Currency::reserve(&who, amount)
         .map_err(|_| "proposer's balance too low")?;
         
@@ -234,7 +233,7 @@ decl_module! {
 
       // check enough balance, lock it
       // TODO: <token::Module<T>>::lock(sender.clone(), deposit, listing_hash)?;
-      ensure!(<T as self::Trait>::Currency::can_reserve(&who, amount), "not enough balances to challenge");
+      // ensure!(<T as self::Trait>::Currency::can_reserve(&who, amount), "not enough balances to challenge");
       <T as self::Trait>::Currency::reserve(&who, amount)
         .map_err(|_| "challenger's balance too low")?;
 
