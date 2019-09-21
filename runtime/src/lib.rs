@@ -296,7 +296,7 @@ impl activity::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const GeCreationFee: u128 = 1_000_000;
+	pub const GeCreationFee: u128 = 100_000;
 }
 
 impl ge::Trait for Runtime {
