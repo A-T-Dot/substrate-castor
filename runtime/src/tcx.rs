@@ -5,7 +5,7 @@ use support::{
   decl_module, decl_storage, decl_event, ensure,
   StorageValue, StorageMap, Parameter,
   traits::{
-    Currency, LockableCurrency, WithdrawReasons,
+    Currency, LockableCurrency, WithdrawReasons, LockIdentifier,
   },
   dispatch::Result,
 };
@@ -13,6 +13,8 @@ use system::ensure_signed;
 use codec::{Encode, Decode};
 use rstd::{cmp, result};
 use crate::ge;
+const STAKING_ID: LockIdentifier = *b"staking ";
+
 
 
 /// The module's configuration trait.
@@ -135,6 +137,13 @@ decl_module! {
       
       // TODO: deduction balace for application
       // <token::Module<T>>::lock(sender.clone(), deposit, hashed.clone())?;
+      <T as self::Trait>::Currency::set_lock(
+        STAKING_ID,
+        &who,
+        amount,
+        T::BlockNumber::max_value(),
+        WithdrawReasons::all(),
+      );
       
       // more than min deposit
       let min_deposit = T::ConvertBalance::convert(governance_entity.min_deposit);
@@ -229,6 +238,13 @@ decl_module! {
 
       // check enough balance, lock it
       // TODO: <token::Module<T>>::lock(sender.clone(), deposit, listing_hash)?;
+      <T as self::Trait>::Currency::set_lock(
+        STAKING_ID,
+        &who,
+        amount,
+        T::BlockNumber::max_value(),
+        WithdrawReasons::all(),
+      );
 
 
       let challenge_nonce = <ChallengeNonce<T>>::get();
@@ -265,6 +281,13 @@ decl_module! {
 
       // deduct the deposit for vote
       // TODO: <token::Module<T>>::lock(sender.clone(), deposit, challenge.listing_hash)?;
+      <T as self::Trait>::Currency::set_lock(
+        STAKING_ID,
+        &who,
+        amount,
+        T::BlockNumber::max_value(),
+        WithdrawReasons::all(),
+      );
 
       // calculate propose quota
       let ge_id = Self::owner_of(challenge.tcx_id).ok_or("Cannot find ge of tcx")?;
@@ -306,6 +329,7 @@ decl_module! {
     }
 
     pub fn resolve(origin, tcx_id: T::TcxId, node_id: <T as ge::Trait>::ContentHash) -> Result {
+      let who = ensure_signed(origin)?;
       ensure!(<TcxListings<T>>::exists((tcx_id,node_id)), "Listing not found");
 
       let listing = Self::listing_of_tcr_by_node_id((tcx_id,node_id));
@@ -370,6 +394,7 @@ decl_module! {
       } else {
         // if rejected, give challenge deposit back to the challenger
         // TODO: <token::Module<T>>::unlock(challenge.owner, challenge.deposit, listing_hash)?;
+				<T as self::Trait>::Currency::remove_lock(STAKING_ID, &who);
         Self::deposit_event(RawEvent::Rejected(tcx_id, node_id));
       }
 
@@ -398,6 +423,7 @@ decl_module! {
         // let reward = reward_ratio.checked_mul(&vote.deposit).ok_or("overflow in calculating reward")?;
         // let total = reward.checked_add(&vote.deposit).ok_or("overflow in calculating reward")?;
         // <token::Module<T>>::unlock(sender.clone(), total, challenge.listing_hash)?;
+				<T as self::Trait>::Currency::remove_lock(STAKING_ID, &who);
 
         Self::deposit_event(RawEvent::Claimed(who.clone(), challenge_id));
       }
