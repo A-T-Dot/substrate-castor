@@ -7,11 +7,12 @@
 use codec::{Decode, Encode, HasCompact};
 
 use sr_primitives::traits::{
-	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
+	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating,
+	SimpleArithmetic, Zero, Bounded, SaturatedConversion, //Convert,
 };
 
 use rstd::prelude::*;
-use rstd::{cmp, result};
+use rstd::{cmp, result, convert::{TryInto}};
 use support::dispatch::Result;
 use support::{
 	decl_event, decl_module, decl_storage, ensure,
@@ -892,6 +893,61 @@ where
 
 	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
 		<Module<T>>::remove_lock(&U::asset_id(), id, who)
+	}
+}
+
+/// Trait for sustainable currency
+pub trait SustainableCurrency<AccountId>: LockableCurrency<AccountId> {
+	/// The free_balance without locks
+	fn available_free_balance(who: &AccountId) -> Self::Balance;
+	/// use free_balance for now
+	fn use_and_lock_free_balance(who: &AccountId, amount: Self::Balance, until: Self::Moment) -> Result;
+}
+
+impl<T, U> SustainableCurrency<T::AccountId> for AssetCurrency<T, U> 
+where
+	T: Trait,
+	T::Balance: MaybeSerializeDebug,
+	U: AssetIdProvider<AssetId = T::AssetId>,
+{
+	fn available_free_balance(
+		who: &T::AccountId,
+	) -> Self::Balance {
+		let now = <system::Module<T>>::block_number();
+		// calc locks
+		let mut locked_balance = Self::Balance::from(0);
+		<Module<T>>::locks(&U::asset_id(), who)
+			.into_iter()
+			.filter_map(|l| {
+				if now < l.until && l.reasons.contains(WithdrawReason::Fee) {
+					Some(l.amount)
+				} else {
+					None
+				}
+			})
+			.for_each(|amount| {
+				locked_balance += amount
+			});
+		Self::free_balance(who) - locked_balance
+	}
+	fn use_and_lock_free_balance(
+		who: &T::AccountId,
+		amount: Self::Balance,
+		until: Self::Moment,
+	) -> Result {
+		let available = Self::available_free_balance(who);
+		available.checked_sub(&amount).ok_or_else(|| "account has too few funds")?;
+		
+		let mut tmp: [u8; 8] = [0; 8];
+		let mutarr = &mut tmp[..];
+		let mut moment_num: u64 = until.saturated_into::<u64>();
+		for i in (0..8).rev() {
+			mutarr[i] = (moment_num % 0xff).try_into().unwrap();
+			moment_num >>= 8;
+		}
+		let id = LockIdentifier::from(tmp);
+		Self::extend_lock(id, who, amount, until, WithdrawReasons::all());
+		Ok(())
 	}
 }
 

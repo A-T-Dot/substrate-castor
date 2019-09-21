@@ -28,13 +28,15 @@ use sr_primitives::{
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
+use crate::non_transfer_asset::SustainableCurrency;
+
 /// The module's configuration trait.
 pub trait Trait: system::Trait {
 	/// Currency type for this module.
 	type Currency: ReservableCurrency<Self::AccountId>;
 
 	/// Energy type for this module
-	type EnergyCurrency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+	type EnergyCurrency: SustainableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
 	/// Action point type for this module
 	type ActivityCurrency: Currency<Self::AccountId>;
@@ -142,8 +144,9 @@ decl_module! {
 // The module's main implement
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
-
-	// TODO
+	pub fn available_energy(who: &T::AccountId) -> EnergyOf<T> {
+		T::EnergyCurrency::available_free_balance(who)
+	}
 
 	// PRIVATE MUTABLES
 	fn charge_for_energy(who: &T::AccountId, value: BalanceOf<T>) -> Result {
@@ -270,6 +273,8 @@ impl<T: Trait> SignedExtension for TakeFees<T> where
 	) -> TransactionValidity {
 		// pay any fees.
 		let fee = Self::compute_fee(len, info, self.0);
+		let required_energy = T::FeeToEnergy::convert(fee);
+
 		let imbalance = match T::Currency::withdraw(
 			who,
 			fee,
