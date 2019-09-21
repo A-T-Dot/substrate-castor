@@ -13,12 +13,7 @@ use system::ensure_signed;
 use codec::{Encode, Decode};
 use rstd::{cmp, result, convert::{TryInto}};
 use crate::ge;
-<<<<<<< HEAD
-
-=======
 use crate::impls;
-use runtime_io::print_hex;
->>>>>>> fix overflow
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait + timestamp::Trait + ge::Trait {
