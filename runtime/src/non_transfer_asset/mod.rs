@@ -928,7 +928,12 @@ where
 			.for_each(|amount| {
 				locked_balance += amount
 			});
-		Self::free_balance(who) - locked_balance
+		let free = Self::free_balance(who)
+		if free > locked_balance {
+			free - locked_balance
+		} else {
+			T::Balance::zero()
+		}
 	}
 	fn use_and_lock_free_balance(
 		who: &T::AccountId,
