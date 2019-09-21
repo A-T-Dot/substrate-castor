@@ -1,5 +1,5 @@
 use sr_primitives::traits::{
-  Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedMul, Convert,
+  Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedMul, Convert, SaturatedConversion,
 };
 use support::{
   decl_module, decl_storage, decl_event, ensure,
@@ -11,11 +11,10 @@ use support::{
 };
 use system::ensure_signed;
 use codec::{Encode, Decode};
-use rstd::{cmp, result};
+use rstd::{cmp, result, convert::{TryInto}};
 use crate::ge;
 use crate::impls;
 
-const STAKING_ID: LockIdentifier = *b"staking ";
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait + timestamp::Trait + ge::Trait {
@@ -237,7 +236,7 @@ decl_module! {
       // TODO: <token::Module<T>>::lock(sender.clone(), deposit, listing_hash)?;
       ensure!(<T as self::Trait>::Currency::can_reserve(&who, amount), "not enough balances to challenge");
       <T as self::Trait>::Currency::reserve(&who, amount)
-        .map_err(|_| "proposer's balance too low")?;
+        .map_err(|_| "challenger's balance too low")?;
 
       let challenge_nonce = <ChallengeNonce<T>>::get();
       let new_challenge_nonce = challenge_nonce.checked_add(&T::ChallengeId::from(1)).ok_or("Exceed maximum challenge count")?;
@@ -273,16 +272,17 @@ decl_module! {
 
       // deduct the deposit for vote
       // TODO: <token::Module<T>>::lock(sender.clone(), deposit, challenge.listing_hash)?;
-      // let mut tmp: [u8; 8] = [0; 8];
-      // let mutarr = &mut tmp[..];
-      // let mut moment_num: u64 = challenge.tcx_id.saturated_into::<u64>();
-      // for i in (0..8).rev() { 
-      //   mutarr[i] = (moment_num % 0xff).try_into().unwrap();
-      //   moment_num >>= 8;
-      // }
-      // let staking_id = LockIdentifier::from(tmp);
+      let mut tmp: [u8; 8] = [0; 8];
+      let mutarr = &mut tmp[..];
+      let mut moment_num: u64 = challenge.tcx_id.saturated_into::<u64>();
+      for i in (0..8).rev() { 
+        mutarr[i] = (moment_num % 0xff).try_into().unwrap();
+        moment_num >>= 8;
+      }
+      let staking_id = LockIdentifier::from(tmp);
+
       <T as self::Trait>::Currency::set_lock(
-        STAKING_ID,
+        staking_id,
         &who,
         amount,
         T::BlockNumber::max_value(),
@@ -425,7 +425,16 @@ decl_module! {
         // let reward = reward_ratio.checked_mul(&vote.deposit).ok_or("overflow in calculating reward")?;
         // let total = reward.checked_add(&vote.deposit).ok_or("overflow in calculating reward")?;
         // <token::Module<T>>::unlock(sender.clone(), total, challenge.listing_hash)?;
-				<T as self::Trait>::Currency::remove_lock(STAKING_ID, &who);
+
+        let mut tmp: [u8; 8] = [0; 8];
+        let mutarr = &mut tmp[..];
+        let mut moment_num: u64 = challenge.tcx_id.saturated_into::<u64>();
+        for i in (0..8).rev() { 
+          mutarr[i] = (moment_num % 0xff).try_into().unwrap();
+          moment_num >>= 8;
+        }
+        let staking_id = LockIdentifier::from(tmp);
+        <T as self::Trait>::Currency::remove_lock(staking_id, &who);
 
         Self::deposit_event(RawEvent::Claimed(who.clone(), challenge_id));
       }
