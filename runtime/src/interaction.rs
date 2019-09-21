@@ -90,10 +90,10 @@ decl_storage! {
     // does this node be reported
     pub NodeReportedBy get(node_reported_by): map <T as node::Trait>::ContentHash => T::AccountId;
 
-    pub LikedNode get(liked_node): map (T::AccountId, <T as node::Trait>::ContentHash) => Option<T::LikeId>;
-    pub AdmiredNode get(admired_node): map (T::AccountId, <T as node::Trait>::ContentHash) => Option<T::AdmireId>;
-    pub GrantedNode get(granted_node): map (T::AccountId, <T as node::Trait>::ContentHash) => Option<T::GrantId>;
-    pub ReportedNode get(reported_node): map (T::AccountId, <T as node::Trait>::ContentHash) => Option<T::ReportId>;
+    pub LikedNode get(liked_node): map (T::AccountId, <T as node::Trait>::ContentHash) => T::LikeId;
+    pub AdmiredNode get(admired_node): map (T::AccountId, <T as node::Trait>::ContentHash) => T::AdmireId;
+    pub GrantedNode get(granted_node): map (T::AccountId, <T as node::Trait>::ContentHash) => T::GrantId;
+    pub ReportedNode get(reported_node): map (T::AccountId, <T as node::Trait>::ContentHash) => T::ReportId;
   }
 } 
 
