@@ -154,14 +154,15 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 	// Implementation of the config type managing the creation of new accounts.
 	fn on_new_account(who: &T::AccountId) {
-		T::EnergyCurrency::deposit_creating(who.clone(), T::EnergyBaseAmount::get());
-		Self::deposit_event(RawEvent::EnergyActivated(who));
+		T::EnergyCurrency::deposit_creating(who, T::EnergyBaseAmount::get());
+		Self::deposit_event(RawEvent::EnergyActivated(who.clone()));
 	}
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
-		// TOdo
+		// TODO clean Energy
+		Self::deposit_event(RawEvent::EnergyDeactivated(who.clone()));
 	}
 }
 

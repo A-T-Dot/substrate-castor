@@ -238,9 +238,9 @@ impl balances::Trait for Runtime {
 	/// The type for recording an account's balance.
 	type Balance = Balance;
 	/// What to do if an account's free balance gets zeroed.
-	type OnFreeBalanceZero = ();
+	type OnFreeBalanceZero = (Activities);
 	/// What to do if a new account is created.
-	type OnNewAccount = (Indices);
+	type OnNewAccount = (Indices, Activities);
 	/// The ubiquitous event type.
 	type Event = Event;
 	type TransactionPayment = ();
