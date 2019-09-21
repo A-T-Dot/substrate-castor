@@ -108,8 +108,12 @@ decl_module! {
     pub fn like(origin, to: <T as node::Trait>::ContentHash) -> Result {
       let sender = ensure_signed(origin)?;
       <node::Module<T>>::owner_of(to).ok_or("Content Node does not exist")?;
-      ensure!(<LikedNode<T>>::exists((sender.clone(), to)), "Already liked this Node.");
-
+      // ensure!(<LikedNode<T>>::exists((sender.clone(), to)), "Already liked this Node.");
+      let like_id = Self::liked_node((sender.clone(), to));
+      // let zero = T::LikeId::from(0);
+      if like_id != T::LikeId::from(0) {
+        return Err("Already liked this Node.")
+      }
       Self::do_like(sender.clone(), to)
     }
 
@@ -119,7 +123,12 @@ decl_module! {
         Some(owner) => owner,
         None => return Err("Content Node does not exist"),
       };
-      ensure!(<AdmiredNode<T>>::exists((sender.clone(), to)), "Already admired this Node.");
+      ensure!(sender != node_owner, "Can not admire yourself.");
+
+      let admire_id = Self::admired_node((sender.clone(), to));
+      if admire_id != T::AdmireId::from(0) {
+        return Err("Already admired this Node.")
+      }
       Self::do_admire(sender.clone(), node_owner, to)
     }
 
@@ -129,15 +138,27 @@ decl_module! {
         Some(owner) => owner,
         None => return Err("Content Node does not exist"),
       };
-      ensure!(<GrantedNode<T>>::exists((sender.clone(), to)), "Already granted this Node.");
+      ensure!(sender != node_owner, "Can not grant yourself.");
+      let grant_id = Self::granted_node((sender.clone(), to));
+      if grant_id != T::GrantId::from(0) {
+        return Err("Already granted this Node.")
+      }
       ensure!(amount > BalanceOf::<T>::from(0), "grant should more than 0.");
       Self::do_grant(sender.clone(), node_owner, to, amount)
     }
 
     pub fn report(origin, target: <T as node::Trait>::ContentHash, reason: <T as node::Trait>::ContentHash) -> Result {
       let sender = ensure_signed(origin)?;
-      <node::Module<T>>::owner_of(target).ok_or("Content Node does not exist")?;
-      ensure!(<ReportedNode<T>>::exists((sender.clone(), target)), "Already reported this Node.");
+      // <node::Module<T>>::owner_of(target).ok_or("Content Node does not exist")?;
+      let node_owner = match <node::Module<T>>::owner_of(target) {
+        Some(owner) => owner,
+        None => return Err("Content Node does not exist"),
+      };
+      ensure!(sender != node_owner, "Can not report yourself.");
+      let report_id = Self::reported_node((sender.clone(), target));
+      if report_id != T::ReportId::from(0) {
+        return Err("Already reported this Node.")
+      }
 
       Self::do_report(sender.clone(), target, reason)
     }
@@ -239,7 +260,7 @@ impl<T: Trait> Module<T> {
     <GrantedNode<T>>::insert((sender.clone(), to), new_grant_id);
     // TODO: transfer CCT to node owner
     let free_balance = T::Currency::free_balance(&sender);
-    ensure!(amount >= free_balance, "Currency not enough for Grant.");
+    ensure!(free_balance >= amount, "Currency not enough for Grant.");
     T::Currency::transfer(&sender, &node_owner, amount)?;
 
     Self::deposit_event(RawEvent::Granted(to, sender, node_owner, amount, new_grant_id, new_node_granted_balance));
