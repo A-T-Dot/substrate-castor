@@ -901,7 +901,7 @@ pub trait SustainableCurrency<AccountId>: LockableCurrency<AccountId> {
 	/// The free_balance without locks
 	fn available_free_balance(who: &AccountId) -> Self::Balance;
 	/// use free_balance for now
-	fn use_and_lock_free_balance(who: &AccountId, amount: Self::Balance, until: Self::Moment) -> Result;
+	fn use_and_lock_free_balance(who: &AccountId, amount: Self::Balance, until: Self::Moment) -> result::Result<Self::Balance, &'static str>;
 }
 
 impl<T, U> SustainableCurrency<T::AccountId> for AssetCurrency<T, U> 
@@ -934,10 +934,10 @@ where
 		who: &T::AccountId,
 		amount: Self::Balance,
 		until: Self::Moment,
-	) -> Result {
+	) -> result::Result<Self::Balance, &'static str> {
 		let available = Self::available_free_balance(who);
 		available.checked_sub(&amount).ok_or_else(|| "account has too few funds")?;
-		
+		// build lock id
 		let mut tmp: [u8; 8] = [0; 8];
 		let mutarr = &mut tmp[..];
 		let mut moment_num: u64 = until.saturated_into::<u64>();
@@ -946,8 +946,41 @@ where
 			moment_num >>= 8;
 		}
 		let id = LockIdentifier::from(tmp);
-		Self::extend_lock(id, who, amount, until, WithdrawReasons::all());
-		Ok(())
+		// extend locks
+		let asset_id = &U::asset_id();
+		let reasons = WithdrawReasons::all();
+		let now = <system::Module<T>>::block_number();
+		let mut new_lock = Some(BalanceLock {
+			id,
+			amount,
+			until,
+			reasons,
+		});
+		let mut unlocked_balance = T::Balance::from(0);
+		let mut locks = <Module<T>>::locks(asset_id, who)
+			.into_iter()
+			.filter_map(|l| {
+				if l.id == id {
+					new_lock.take().map(|nl| BalanceLock {
+						id: l.id,
+						amount: l.amount.max(nl.amount),
+						until: l.until.max(nl.until),
+						reasons: l.reasons | nl.reasons,
+					})
+				} else if l.until > now {
+					Some(l)
+				} else {
+					unlocked_balance += l.amount;
+					None
+				}
+			})
+			.collect::<Vec<_>>();
+		if let Some(lock) = new_lock {
+			locks.push(lock)
+		}
+		// MUTABLES
+		<Locks<T>>::insert(asset_id, who, &locks);
+		Ok(unlocked_balance)
 	}
 }
 
