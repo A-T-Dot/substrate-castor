@@ -71,6 +71,7 @@ mod activity;
 mod tcx;
 mod ge;
 mod node;
+mod interaction;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -316,6 +317,19 @@ impl node::Trait for Runtime {
 	type NodeType = u32;
 }
 
+impl interaction::Trait for Runtime {
+	type Event = Event;
+	type LikeId = u64;
+  type AdmireId = u64;
+  type GrantId = u64;
+  type ReportId = u64;
+  /// Currency type for this module.
+	type Currency = Balances;
+	// type EnergyCurrency = non_transfer_asset::EnergyAssetCurrency<Runtime>;
+	type ActivityCurrency = non_transfer_asset::ActivityAssetCurrency<Runtime>;
+	type ReputationCurrency = non_transfer_asset::ReputationAssetCurrency<Runtime>;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -335,6 +349,7 @@ construct_runtime!(
 		Tcx: tcx::{Module, Call, Storage, Event<T>},
 		Ge: ge::{Module, Call, Storage, Event<T>},
 		Node: node::{Module, Call, Storage, Event<T>},
+		Interaction: interaction::{Module, Call, Storage, Event<T>},
 	}
 );
 
