@@ -30,9 +30,6 @@ use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait {
-	/// Time used for computing
-	type Time: Time;
-
 	/// Currency type for this module.
 	type Currency: ReservableCurrency<Self::AccountId>;
 
@@ -44,12 +41,6 @@ pub trait Trait: system::Trait {
 
 	/// Reputation point type for this module
 	type ReputationCurrency: Currency<Self::AccountId>;
-
-	/// Gives a chance to clean up resources associated with the given account.
-	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
-
-	/// Handler for when a new account is created.
-	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when taking transaction fees.
 	type TransactionPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -63,11 +54,17 @@ pub trait Trait: system::Trait {
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<BalanceOf<Self>>;
 
+	/// The base Energy amount of activated account
+	type EnergyBaseAmount: Get<EnergyOf<Self>>;
+
 	/// Convert a weight value into a deductible fee based on the currency type.
 	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
 
 	/// Convert a fee value to energy point	
 	type FeeToEnergy: Convert<BalanceOf<Self>, EnergyOf<Self>>;
+
+	/// Convert a charging value to energy point	
+	type ChargingToEnergy: Convert<BalanceOf<Self>, EnergyOf<Self>>;
 }
 
 // Balance zone
@@ -85,16 +82,24 @@ pub type ReputationOf<T> = <<T as Trait>::ReputationCurrency as Currency<<T as s
 decl_storage! {
 	trait Store for Module<T: Trait> as Activities {
 		/// Map from all extend
-		pub Charged get(charged): map T::AccountId => Option<BalanceOf<T>>
+		pub Charged get(charged): map T::AccountId => Option<BalanceOf<T>>;
+		/// Map for next energy unlock moment
+		pub NextEnergyUnlockMoment get(next_energy_unlock): map T::AccountId => Option<T::BlockNumber>;
 	}
 }
 
 decl_event!(
 	pub enum Event<T> where
     AccountId = <T as system::Trait>::AccountId,
+		Balance = BalanceOf<T>,
+		Energy = EnergyOf<T>,
 		ActionPoint = ActionPointOf<T>,
 		Reputation = ReputationOf<T>
   {
+		FeePayed(AccountId, Energy, Balance),
+		EnergyRecovered(AccountId, Energy),
+		EnergyActivated(AccountId),
+		EnergyDeactivated(AccountId),
 		ActivityReward(AccountId, ActionPoint),
 		ReputationReward(AccountId, Reputation),
 		ReputationSlash(AccountId, Reputation),
@@ -137,7 +142,6 @@ impl<T: Trait> Module<T> {
 	// TODO
 
 	// PRIVATE MUTABLES
-
 	fn charge_for_energy(who: &T::AccountId, value: BalanceOf<T>) -> Result {
 		Ok(())
 	}
@@ -150,7 +154,15 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 	// Implementation of the config type managing the creation of new accounts.
 	fn on_new_account(who: &T::AccountId) {
-		// TODO
+		T::EnergyCurrency::deposit_creating(who, T::EnergyBaseAmount::get());
+		Self::deposit_event(RawEvent::EnergyActivated(who.clone()));
+	}
+}
+
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
+	fn on_free_balance_zero(who: &T::AccountId) {
+		// TODO clean Energy
+		Self::deposit_event(RawEvent::EnergyDeactivated(who.clone()));
 	}
 }
 

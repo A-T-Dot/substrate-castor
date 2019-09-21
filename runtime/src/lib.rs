@@ -61,6 +61,10 @@ pub type Hash = primitives::H256;
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
 
+/// Implementations of some helper traits passed into runtime modules as associated types.
+pub mod impls;
+use impls::{FeeToEnergy, ChargingToEnergy};
+
 /// Used for castor.network modules
 mod non_transfer_asset;
 mod activity;
@@ -223,20 +227,20 @@ impl timestamp::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 500;
-	pub const TransferFee: u128 = 0;
-	pub const CreationFee: u128 = 0;
-	pub const TransactionBaseFee: u128 = 0;
-	pub const TransactionByteFee: u128 = 1;
+	pub const ExistentialDeposit: u128 = 100_000;
+	pub const TransferFee: u128 = 100_000;
+	pub const CreationFee: u128 = 100_000;
+	pub const TransactionBaseFee: u128 = 10_000;
+	pub const TransactionByteFee: u128 = 100;
 }
 
 impl balances::Trait for Runtime {
 	/// The type for recording an account's balance.
 	type Balance = Balance;
 	/// What to do if an account's free balance gets zeroed.
-	type OnFreeBalanceZero = ();
+	type OnFreeBalanceZero = (Activities);
 	/// What to do if a new account is created.
-	type OnNewAccount = (Indices);
+	type OnNewAccount = (Indices, Activities);
 	/// The ubiquitous event type.
 	type Event = Event;
 	type TransactionPayment = ();
@@ -265,6 +269,25 @@ impl non_transfer_asset::Trait for Runtime {
 	type Balance = Balance;
 	type AssetId = AssetId;
 	type Event = Event;
+}
+
+parameter_types! {
+	pub const EnergyBaseAmount: u128 = 1_000_000;
+}
+
+impl activity::Trait for Runtime {
+	type Currency = Balances;
+	type EnergyCurrency = non_transfer_asset::EnergyAssetCurrency<Runtime>;
+	type ActivityCurrency = non_transfer_asset::ActivityAssetCurrency<Runtime>;
+	type ReputationCurrency = non_transfer_asset::ReputationAssetCurrency<Runtime>;
+	type TransactionPayment = ();
+	type Event = Event;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
+	type EnergyBaseAmount = EnergyBaseAmount;
+	type WeightToFee = ConvertInto;
+	type FeeToEnergy = FeeToEnergy;
+	type ChargingToEnergy = ChargingToEnergy;
 }
 
 impl ge::Trait for Runtime {
@@ -307,6 +330,7 @@ construct_runtime!(
 		Sudo: sudo,
 		// Used for castor.network
 		NonTransferAssets: non_transfer_asset::{default},
+		Activities: activity::{Module, Call, Storage, Event<T>},
 		Tcx: tcx::{Module, Call, Storage, Event<T>},
 		Ge: ge::{Module, Call, Storage, Event<T>},
 		Node: node::{Module, Call, Storage, Event<T>},

@@ -21,7 +21,7 @@ use support::{
 	},
 	Parameter, StorageDoubleMap, StorageMap, StorageValue,
 };
-use system::{ensure_signed, ensure_root};
+use system::{ensure_root};
 
 // test mod
 // mod mock;
@@ -121,6 +121,10 @@ decl_event!(
 	{
 		/// Asset created (asset_id, creator, asset_options).
 		Created(AssetId, AccountId, AssetOptions),
+		/// Asset of a account was activated (asset_id, who, initial balance)
+		Activated(AssetId, AccountId, Balance),
+		/// Asset of a account was reaped (asset_id, who)
+		Deactivated(AssetId, AccountId),
 		/// New asset minted (asset_id, account, amount).
 		Minted(AssetId, AccountId, Balance),
 		/// Asset burned (asset_id, account, amount).
@@ -144,6 +148,23 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
 
+	/// Get an account's total balance of an asset kind.
+	pub fn total_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
+		Self::free_balance(asset_id, who) + Self::reserved_balance(asset_id, who)
+	}
+
+	/// Get an account's free balance of an asset kind.
+	pub fn free_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
+		<FreeBalance<T>>::get(asset_id, who)
+	}
+
+	/// Get an account's reserved balance of an asset kind.
+	pub fn reserved_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
+		<ReservedBalance<T>>::get(asset_id, who)
+	}
+
+	// MUTABLES (DANGEROUS)
+
 	/// Creates an asset.
 	///
 	/// # Arguments
@@ -152,7 +173,7 @@ impl<T: Trait> Module<T> {
 	/// * `from_account`: The initiator account of this call
 	/// * `asset_options`: Asset creation options.
 	///
-	pub fn create_asset(
+	fn create_asset(
 		asset_id: Option<T::AssetId>,
 		from_account: Option<T::AccountId>,
 		options: AssetOptions<T::Balance>,
@@ -190,81 +211,32 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Created(asset_id, account_id, options));
 	}
 
-	/// Mint account's amount
-	///
-	/// # Arguments
-	/// * `asset_id`: An ID of a reserved asset.
-	/// * `to`: The initiator account of this call
-	/// * `amount`: Balance
-	///
-	pub fn make_mint(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::check_mint(asset_id, to, amount)?;
-		Self::do_mint(asset_id, to, amount);
-
-		Ok(())
-	}
-	fn check_mint(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::free_balance(asset_id, to).checked_add(&amount)
-			.ok_or("free balance got overflow after minting.")?;
-
-		<TotalIssuance<T>>::get(asset_id).checked_add(&amount)
-			.ok_or("total_issuance got overflow after minting.")?;
-
-		Ok(())
-	}
-	/// check outside
-	fn do_mint(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) {
-		<TotalIssuance<T>>::mutate(asset_id, |issued| *issued += amount);
-		<FreeBalance<T>>::mutate(asset_id, to, |balance| *balance += amount);
-
-		// send event
-		Self::deposit_event(RawEvent::Minted(*asset_id, to.clone(), amount));
+	/// activate asset
+	fn do_asset_activate(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) {
+		Self::deposit_event(RawEvent::Activated(*asset_id, who.clone(), amount.clone()));
 	}
 
-	/// Burn account's amount
-	///
-	/// # Arguments
-	/// * `asset_id`: An ID of a reserved asset.
-	/// * `to`: The initiator account of this call
-	/// * `amount`: burn amount
-	///
-	pub fn make_burn(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::check_burn(asset_id, to, amount)?;
-		Self::do_burn(asset_id, to, amount);
-
-		Ok(())
-	}
-	fn check_burn(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::free_balance(&asset_id, &to).checked_sub(&amount)
-			.ok_or("free_balance got underflow after burning")?;
-
-		<TotalIssuance<T>>::get(asset_id).checked_sub(&amount)
-			.ok_or("total_issuance got underflow after burning")?;
-
-		Ok(())
-	}
-	fn do_burn(asset_id: &T::AssetId, to: &T::AccountId, amount: T::Balance) {
-		<TotalIssuance<T>>::mutate(asset_id, |issued| *issued -= amount);
-		<FreeBalance<T>>::mutate(asset_id, to, |balance| *balance -= amount);
-		// send event
-		Self::deposit_event(RawEvent::Burned(*asset_id, to.clone(), amount));
+	/// deactivate asset
+	fn do_asset_deactivate(asset_id: &T::AssetId, who: &T::AccountId) {
+		Self::deposit_event(RawEvent::Deactivated(*asset_id, who.clone()));
 	}
 
-	/// Get an account's free balance of an asset kind.
-	pub fn free_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
-		<FreeBalance<T>>::get(asset_id, who)
-	}
+	/// try remove asset
+	fn on_asset_under_zero (asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
+		let dust = <FreeBalance<T>>::take(asset_id, who);
+		<Locks<T>>::remove(asset_id, who);
 
-	/// Get an account's reserved balance of an asset kind.
-	pub fn reserved_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
-		<ReservedBalance<T>>::get(asset_id, who)
+		if Self::reserved_balance(asset_id, who).is_zero() {
+			Self::do_asset_deactivate(asset_id, who);
+		}
+		dust
 	}
 
 	/// Move `amount` from free balance to reserved balance.
 	///
 	/// If the free balance is lower than `amount`, then no funds will be moved and an `Err` will
 	/// be returned. This is different behavior than `unreserve`.
-	pub fn reserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Result {
+	fn reserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Result {
 		// Do we need to consider that this is an atomic transaction?
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let original_free_balance = Self::free_balance(asset_id, who);
@@ -283,7 +255,7 @@ impl<T: Trait> Module<T> {
 	/// As many assets up to `amount` will be moved as possible. If the reserve balance of `who`
 	/// is less than `amount`, then the remaining amount will be returned.
 	/// NOTE: This is different behavior than `reserve`.
-	pub fn unreserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> T::Balance {
+	fn unreserve(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> T::Balance {
 		let b = Self::reserved_balance(asset_id, who);
 		let actual = rstd::cmp::min(b, amount);
 		let original_free_balance = Self::free_balance(asset_id, who);
@@ -363,7 +335,7 @@ impl<T: Trait> Module<T> {
 	/// for the given reason.
 	///
 	/// `Err(...)` with the reason why not otherwise.
-	pub fn ensure_can_withdraw(
+	fn ensure_can_withdraw(
 		asset_id: &T::AssetId,
 		who: &T::AccountId,
 		_amount: T::Balance,
@@ -736,7 +708,8 @@ where
 		Zero::zero()
 	}
 
-	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, value: Self::Balance) -> Result {
+	
+	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, _value: Self::Balance) -> Result {
 		ensure!(transactor == dest, "transfer is not supported.");
 		Ok(())
 	}
@@ -761,7 +734,15 @@ where
 			.ok_or_else(|| "account has too few funds")?;
 		Self::ensure_can_withdraw(who, value, reason, new_balance)?;
 		<Module<T>>::set_free_balance(&U::asset_id(), who, new_balance);
-		Ok(NegativeImbalance::new(value))
+		// try unset
+		let mut dust = T::Balance::zero();
+		if new_balance <= dust {
+			dust = <Module<T>>::on_asset_under_zero(&U::asset_id(), who);
+		}
+		let final_value = dust + value;
+		// send event: non transfer just burn now
+		<Module<T>>::deposit_event(RawEvent::Burned(U::asset_id(), who.clone(), final_value));
+		Ok(NegativeImbalance::new(final_value))
 	}
 
 	fn deposit_into_existing(
@@ -773,7 +754,13 @@ where
 	}
 
 	fn deposit_creating(who: &T::AccountId, value: Self::Balance) -> Self::PositiveImbalance {
+		let original = <Module<T>>::free_balance(&U::asset_id(), who);
+		if original == Self::Balance::zero() {
+			<Module<T>>::do_asset_activate(&U::asset_id(), who, value);
+		}
 		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who) + value);
+		// send event: non transfer just mint now
+		<Module<T>>::deposit_event(RawEvent::Minted(U::asset_id(), who.clone(), value));
 		if let SignedImbalance::Positive(p) = imbalance {
 			p
 		} else {
@@ -937,4 +924,4 @@ impl<T: Trait> AssetIdProvider for ReputationAssetIdProvider<T> {
 
 pub type EnergyAssetCurrency<T> = AssetCurrency<T, EnergyAssetIdProvider<T>>;
 pub type ActivityAssetCurrency<T> = AssetCurrency<T, ActivityAssetIdProvider<T>>;
-pub type ClaimingAssetCurrency<T> = AssetCurrency<T, ReputationAssetIdProvider<T>>;
+pub type ReputationAssetCurrency<T> = AssetCurrency<T, ReputationAssetIdProvider<T>>;
