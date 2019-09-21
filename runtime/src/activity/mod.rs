@@ -6,12 +6,12 @@
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 use support::{
-	StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module,
+	StorageValue, StorageMap, decl_event, decl_storage, decl_module,
 	traits::{
-		Currency, LockableCurrency, ReservableCurrency,
-		UpdateBalanceOutcome, OnFreeBalanceZero, OnUnbalanced,
-		WithdrawReason, WithdrawReasons, LockIdentifier, ExistenceRequirement,
-		Imbalance, SignedImbalance, Get, Time,
+		Currency, ReservableCurrency,
+		OnFreeBalanceZero, OnUnbalanced,
+		WithdrawReason, ExistenceRequirement,
+		Imbalance, Get,
 	},
 	dispatch::Result,
 };
@@ -21,12 +21,12 @@ use sr_primitives::{
 		TransactionValidity,
 	},
 	traits::{
-		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
-		Saturating, Bounded, SignedExtension, SaturatedConversion, Convert,
+		Zero, CheckedAdd, CheckedSub,
+		Saturating, SignedExtension, SaturatedConversion, Convert,
 	},
 	weights::{DispatchInfo, SimpleDispatchInfo, Weight},
 };
-use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
+use system::{OnNewAccount, ensure_signed};
 
 use crate::non_transfer_asset::SustainableCurrency;
 
@@ -67,6 +67,12 @@ pub trait Trait: system::Trait {
 
 	/// Convert a charging value to energy point	
 	type ChargingToEnergy: Convert<BalanceOf<Self>, EnergyOf<Self>>;
+
+	/// Convert an energy point to fee value
+	type EnergyToFee: Convert<EnergyOf<Self>, BalanceOf<Self>>;
+
+	/// Convert an energy point to locking block number
+	type EnergyToLocking: Convert<EnergyOf<Self>, <Self as system::Trait>::BlockNumber>;
 }
 
 // Balance zone
@@ -85,8 +91,6 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Activities {
 		/// Map from all extend
 		pub Charged get(charged): map T::AccountId => BalanceOf<T>;
-		/// Map for next energy unlock moment
-		pub NextEnergyUnlockMoment get(next_energy_unlock): map T::AccountId => Option<T::BlockNumber>;
 	}
 }
 
@@ -100,11 +104,10 @@ decl_event!(
   {
 		// Fee payment
 		FeePayed(AccountId, Energy, Balance),
-		// Energy part
+		// Energy and Actiono part
 		EnergyActivated(AccountId),
 		EnergyDeactivated(AccountId),
 		EnergyRecovered(AccountId, Energy),
-		// ActionPoint part
 		ActionPointReward(AccountId, ActionPoint),
 		// Reputation part
 		ReputationReward(AccountId, Reputation),
@@ -271,13 +274,32 @@ impl<T: Trait> SignedExtension for TakeFees<T> where
 		info: DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
-		// pay any fees.
 		let fee = Self::compute_fee(len, info, self.0);
+		// pay fees.
+		// first use energy, second use balance
 		let required_energy = T::FeeToEnergy::convert(fee);
+		let available_energy = T::EnergyCurrency::available_free_balance(who);
+		let using_energy = required_energy.min(available_energy);
+		let mut using_fee = BalanceOf::<T>::zero();
+		if using_energy < required_energy {
+			using_fee = T::EnergyToFee::convert(required_energy - using_energy);
+		}
+		let now = <system::Module<T>>::block_number();
+		let locking_block = T::EnergyToLocking::convert(using_energy);
+
+		// lock energy and get unlocked energy
+		let unlocked_energy = match T::EnergyCurrency::use_and_lock_free_balance(who, using_energy.clone(), now + locking_block) {
+			Ok(result) => result,
+			Err(_) => return InvalidTransaction::Payment.into(),
+		};
+		// dispatch EnergyRecovered
+		if !unlocked_energy.is_zero() {
+			<Module<T>>::deposit_event(RawEvent::EnergyRecovered(who.clone(), unlocked_energy));
+		}
 
 		let imbalance = match T::Currency::withdraw(
 			who,
-			fee,
+			using_fee.clone(),
 			WithdrawReason::TransactionPayment,
 			ExistenceRequirement::KeepAlive,
 		) {
@@ -286,6 +308,9 @@ impl<T: Trait> SignedExtension for TakeFees<T> where
 		};
 		T::TransactionPayment::on_unbalanced(imbalance);
 
+		// Send event
+		<Module<T>>::deposit_event(RawEvent::FeePayed(who.clone(), using_energy, using_fee));
+		
 		let mut r = ValidTransaction::default();
 		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
 		// will be a bit more than setting the priority to tip. For now, this is enough.
