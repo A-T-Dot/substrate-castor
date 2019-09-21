@@ -63,7 +63,7 @@ pub type DigestItem = generic::DigestItem<Hash>;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{FeeToEnergy, ChargingToEnergy};
+use impls::{FeeToEnergy, ChargingToEnergy, ConvertBalance};
 
 /// Used for castor.network modules
 mod non_transfer_asset;
@@ -300,13 +300,14 @@ impl ge::Trait for Runtime {
 }
 
 impl tcx::Trait for Runtime {
+	type Currency = Balances;
 	type Event = Event;
 	type TcxId = u64;
 	type TcxType = TcxType;
 	type ActionId = u64;
 	type ListingId = u64;
 	type ChallengeId = u64;
-	type ContentHash = ContentHash;
+	type ConvertBalance = ConvertBalance;
 }
 
 impl node::Trait for Runtime {
@@ -329,7 +330,7 @@ construct_runtime!(
 		Balances: balances::{default, Error},
 		Sudo: sudo,
 		// Used for castor.network
-		NonTransferAssets: non_transfer_asset::{default},
+		NonTransferAssets: non_transfer_asset::{Module, Call, Storage, Event<T>, Config<T>},
 		Activities: activity::{Module, Call, Storage, Event<T>},
 		Tcx: tcx::{Module, Call, Storage, Event<T>},
 		Ge: ge::{Module, Call, Storage, Event<T>},

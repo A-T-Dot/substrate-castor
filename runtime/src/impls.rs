@@ -22,3 +22,12 @@ impl Convert<Balance, Balance> for ChargingToEnergy {
     Balance::from(x).saturating_mul(10)
 	}
 }
+
+/// Handles converting a scalar to convert balance
+/// 
+pub struct ConvertBalance;
+impl Convert<Balance, Balance> for ConvertBalance {
+	fn convert(x: Balance) -> Balance {
+    x.into()
+	}
+}

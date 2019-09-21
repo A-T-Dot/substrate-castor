@@ -5,7 +5,7 @@ use rstd::{
 use support::{
   decl_module, decl_storage, decl_event, ensure, dispatch::Result,
   traits::{
-    Currency, ReservableCurrency, LockableCurrency,
+    Currency, ReservableCurrency,
     OnUnbalanced, // WithdrawReasons, 
   },
   StorageValue, StorageMap, Parameter,
@@ -23,8 +23,7 @@ pub trait Trait: system::Trait + timestamp::Trait {
   type ContentHash: Parameter + Member + Default + Copy;
 
 	/// Currency type for this module.
-	type Currency: ReservableCurrency<Self::AccountId>
-		+ LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+	type Currency: ReservableCurrency<Self::AccountId>;
 
   /// The overarching event type.
   type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;

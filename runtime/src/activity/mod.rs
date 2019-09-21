@@ -4,7 +4,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use codec::{Codec, Encode, Decode};
+use codec::{Encode, Decode};
 use support::{
 	StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module,
 	traits::{
