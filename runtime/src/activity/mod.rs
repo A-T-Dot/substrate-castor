@@ -6,7 +6,7 @@
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 use support::{
-	StorageValue, StorageMap, decl_event, decl_storage, decl_module,
+	StorageValue, StorageMap, decl_event, decl_storage, decl_module, ensure,
 	traits::{
 		Currency, ReservableCurrency,
 		OnFreeBalanceZero, OnUnbalanced,
@@ -29,6 +29,11 @@ use sr_primitives::{
 use system::{OnNewAccount, ensure_signed};
 
 use crate::non_transfer_asset::SustainableCurrency;
+
+/// Trait for activity
+pub trait ActivityInterface<AccountId, Balance> {
+	fn admire(sender: &AccountId, target: &AccountId, cap: Balance) -> Result;
+}
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait {
@@ -204,6 +209,19 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 			T::Currency::unreserve(who, dust);
 		}
 		T::EnergyCurrency::slash(who, T::EnergyCurrency::total_balance(who));
+	}
+}
+
+impl<T: Trait> ActivityInterface<T::AccountId, ActionPointOf<T>> for Module<T> {
+	// do admire
+	fn admire(sender: &T::AccountId, target: &T::AccountId, cap: ActionPointOf<T>) -> Result {
+		let earned_rp = T::ActionPointToReputation::convert(cap.clone());
+		ensure!(!earned_rp.is_zero(), "action point too low ");
+		
+		T::ActivityCurrency::withdraw(sender, cap, WithdrawReason::Fee, ExistenceRequirement::KeepAlive)?;
+		T::ReputationCurrency::deposit_into_existing(target, earned_rp).unwrap();
+
+		Ok(())
 	}
 }
 
