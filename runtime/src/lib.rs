@@ -228,11 +228,11 @@ impl timestamp::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 100_000;
-	pub const TransferFee: u128 = 100_000;
-	pub const CreationFee: u128 = 100_000;
-	pub const TransactionBaseFee: u128 = 10_000;
-	pub const TransactionByteFee: u128 = 100;
+	pub const ExistentialDeposit: u128 = 10_000;
+	pub const TransferFee: u128 = 10_000;
+	pub const CreationFee: u128 = 10_000;
+	pub const TransactionBaseFee: u128 = 1_000;
+	pub const TransactionByteFee: u128 = 10;
 }
 
 impl balances::Trait for Runtime {
@@ -377,7 +377,7 @@ pub type SignedExtra = (
 	system::CheckEra<Runtime>,
 	system::CheckNonce<Runtime>,
 	system::CheckWeight<Runtime>,
-	balances::TakeFees<Runtime>
+	activity::TakeFees<Runtime>
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;

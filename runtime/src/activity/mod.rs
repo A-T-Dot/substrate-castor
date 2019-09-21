@@ -6,12 +6,12 @@
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 use support::{
-	StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module,
+	StorageValue, StorageMap, decl_event, decl_storage, decl_module,
 	traits::{
-		Currency, LockableCurrency, ReservableCurrency,
-		UpdateBalanceOutcome, OnFreeBalanceZero, OnUnbalanced,
-		WithdrawReason, WithdrawReasons, LockIdentifier, ExistenceRequirement,
-		Imbalance, SignedImbalance, Get, Time,
+		Currency, ReservableCurrency,
+		OnFreeBalanceZero, OnUnbalanced,
+		WithdrawReason, ExistenceRequirement,
+		Imbalance, Get,
 	},
 	dispatch::Result,
 };
@@ -21,12 +21,12 @@ use sr_primitives::{
 		TransactionValidity,
 	},
 	traits::{
-		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
-		Saturating, Bounded, SignedExtension, SaturatedConversion, Convert,
+		Zero, CheckedAdd, CheckedSub,
+		Saturating, SignedExtension, SaturatedConversion, Convert,
 	},
 	weights::{DispatchInfo, SimpleDispatchInfo, Weight},
 };
-use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
+use system::{OnNewAccount, ensure_signed};
 
 use crate::non_transfer_asset::SustainableCurrency;
 
