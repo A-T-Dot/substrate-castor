@@ -5,7 +5,7 @@ use support::{
   decl_module, decl_storage, decl_event, ensure,
   StorageValue, StorageMap, Parameter,
   traits::{
-    Currency, LockableCurrency, WithdrawReasons, LockIdentifier,
+    Currency, LockableCurrency, WithdrawReasons, LockIdentifier, ReservableCurrency,
   },
   dispatch::Result,
 };
@@ -13,9 +13,9 @@ use system::ensure_signed;
 use codec::{Encode, Decode};
 use rstd::{cmp, result};
 use crate::ge;
+use crate::impls;
+
 const STAKING_ID: LockIdentifier = *b"staking ";
-
-
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait + timestamp::Trait + ge::Trait {
@@ -26,7 +26,7 @@ pub trait Trait: system::Trait + timestamp::Trait + ge::Trait {
   type ChallengeId: Parameter + Member + Default + Bounded + SimpleArithmetic + Copy;
 
   /// Currency of this module
-  type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+  type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber> + ReservableCurrency<Self::AccountId>;
 
   /// Convert Balance
   type ConvertBalance: Convert<ge::BalanceOf<Self>, BalanceOf<Self>>;
@@ -124,6 +124,7 @@ decl_module! {
     // this is needed only if you are using events in your module
     fn deposit_event() = default;
 
+
     // TODO: check if node exists
     pub fn propose(origin, tcx_id: T::TcxId, node_id: <T as ge::Trait>::ContentHash, amount: BalanceOf<T>, 
     action_id: T::ActionId) -> Result {
@@ -137,14 +138,10 @@ decl_module! {
       
       // TODO: deduction balace for application
       // <token::Module<T>>::lock(sender.clone(), deposit, hashed.clone())?;
-      <T as self::Trait>::Currency::set_lock(
-        STAKING_ID,
-        &who,
-        amount,
-        T::BlockNumber::max_value(),
-        WithdrawReasons::all(),
-      );
-      
+      ensure!(<T as self::Trait>::Currency::can_reserve(&who, amount), "not enough balances to propose");
+      <T as self::Trait>::Currency::reserve(&who, amount)
+        .map_err(|_| "proposer's balance too low")?;
+        
       // more than min deposit
       let min_deposit = T::ConvertBalance::convert(governance_entity.min_deposit);
       // TODO: quota instead of amount
@@ -238,14 +235,9 @@ decl_module! {
 
       // check enough balance, lock it
       // TODO: <token::Module<T>>::lock(sender.clone(), deposit, listing_hash)?;
-      <T as self::Trait>::Currency::set_lock(
-        STAKING_ID,
-        &who,
-        amount,
-        T::BlockNumber::max_value(),
-        WithdrawReasons::all(),
-      );
-
+      ensure!(<T as self::Trait>::Currency::can_reserve(&who, amount), "not enough balances to challenge");
+      <T as self::Trait>::Currency::reserve(&who, amount)
+        .map_err(|_| "proposer's balance too low")?;
 
       let challenge_nonce = <ChallengeNonce<T>>::get();
       let new_challenge_nonce = challenge_nonce.checked_add(&T::ChallengeId::from(1)).ok_or("Exceed maximum challenge count")?;
@@ -281,6 +273,14 @@ decl_module! {
 
       // deduct the deposit for vote
       // TODO: <token::Module<T>>::lock(sender.clone(), deposit, challenge.listing_hash)?;
+      // let mut tmp: [u8; 8] = [0; 8];
+      // let mutarr = &mut tmp[..];
+      // let mut moment_num: u64 = challenge.tcx_id.saturated_into::<u64>();
+      // for i in (0..8).rev() { 
+      //   mutarr[i] = (moment_num % 0xff).try_into().unwrap();
+      //   moment_num >>= 8;
+      // }
+      // let staking_id = LockIdentifier::from(tmp);
       <T as self::Trait>::Currency::set_lock(
         STAKING_ID,
         &who,
@@ -394,7 +394,9 @@ decl_module! {
       } else {
         // if rejected, give challenge deposit back to the challenger
         // TODO: <token::Module<T>>::unlock(challenge.owner, challenge.deposit, listing_hash)?;
-				<T as self::Trait>::Currency::remove_lock(STAKING_ID, &who);
+				// <T as self::Trait>::Currency::remove_lock(STAKING_ID, &who);
+        let amount = <T as self::Trait>::Currency::reserved_balance(&who);
+        <T as self::Trait>::Currency::unreserve(&who, amount);
         Self::deposit_event(RawEvent::Rejected(tcx_id, node_id));
       }
 
