@@ -928,7 +928,7 @@ where
 			.for_each(|amount| {
 				locked_balance += amount
 			});
-		let free = Self::free_balance(who)
+		let free = Self::free_balance(who);
 		if free > locked_balance {
 			free - locked_balance
 		} else {
