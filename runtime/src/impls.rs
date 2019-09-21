@@ -27,7 +27,7 @@ pub struct EnergyToLocking;
 impl Convert<Balance, BlockNumber> for EnergyToLocking {
 	fn convert(x: Balance) -> BlockNumber {
 		let num: u128 = x.try_into().unwrap();
-		(num / 100 + 1).try_into().unwrap()
+		(num / 25 + 1).try_into().unwrap()
 	}
 }
 
@@ -38,6 +38,13 @@ impl Convert<Balance, Balance> for ChargingToEnergy {
 	fn convert(x: Balance) -> Balance {
 		// 1: 10
 		(x * 10).into()
+	}
+}
+
+pub struct EnergyToActionPoint;
+impl Convert<Balance, Balance> for EnergyToActionPoint {
+	fn convert(x: Balance) -> Balance {
+		(x / 20).into()
 	}
 }
 

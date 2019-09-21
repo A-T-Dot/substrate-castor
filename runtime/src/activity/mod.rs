@@ -73,6 +73,12 @@ pub trait Trait: system::Trait {
 
 	/// Convert an energy point to locking block number
 	type EnergyToLocking: Convert<EnergyOf<Self>, <Self as system::Trait>::BlockNumber>;
+
+	/// Convert an energy point to action point
+	type EnergyToActionPoint: Convert<EnergyOf<Self>, ActionPointOf<Self>>;
+
+	/// Convert an action point to reputation
+	type ActionPointToReputation: Convert<ActionPointOf<Self>, ReputationOf<Self>>;
 }
 
 // Balance zone
@@ -99,16 +105,11 @@ decl_event!(
     AccountId = <T as system::Trait>::AccountId,
 		Balance = BalanceOf<T>,
 		Energy = EnergyOf<T>,
-		ActionPoint = ActionPointOf<T>,
 		Reputation = ReputationOf<T>
   {
 		// Fee payment
 		FeePayed(AccountId, Energy, Balance),
-		// Energy and Actiono part
-		EnergyActivated(AccountId),
-		EnergyDeactivated(AccountId),
 		EnergyRecovered(AccountId, Energy),
-		ActionPointReward(AccountId, ActionPoint),
 		// Reputation part
 		ReputationReward(AccountId, Reputation),
 		ReputationSlash(AccountId, Reputation),
@@ -193,7 +194,6 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 	// Implementation of the config type managing the creation of new accounts.
 	fn on_new_account(who: &T::AccountId) {
 		T::EnergyCurrency::deposit_creating(who, T::EnergyBaseAmount::get());
-		Self::deposit_event(RawEvent::EnergyActivated(who.clone()));
 	}
 }
 
@@ -204,7 +204,6 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 			T::Currency::unreserve(who, dust);
 		}
 		T::EnergyCurrency::slash(who, T::EnergyCurrency::total_balance(who));
-		Self::deposit_event(RawEvent::EnergyDeactivated(who.clone()));
 	}
 }
 
@@ -307,6 +306,14 @@ impl<T: Trait> SignedExtension for TakeFees<T> where
 			Err(_) => return InvalidTransaction::Payment.into(),
 		};
 		T::TransactionPayment::on_unbalanced(imbalance);
+
+		// increate action point
+		if !using_energy.is_zero() {
+			let earned_ap = T::EnergyToActionPoint::convert(using_energy.clone());
+			if !earned_ap.is_zero() {
+				T::ActivityCurrency::deposit_into_existing(who, earned_ap).unwrap();
+			}
+		}
 
 		// Send event
 		<Module<T>>::deposit_event(RawEvent::FeePayed(who.clone(), using_energy, using_fee));

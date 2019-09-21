@@ -63,7 +63,7 @@ pub type DigestItem = generic::DigestItem<Hash>;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{FeeToEnergy, EnergyToFee, ChargingToEnergy, EnergyToLocking, ConvertBalance};
+use impls::{FeeToEnergy, EnergyToFee, ChargingToEnergy, EnergyToLocking, EnergyToActionPoint, ConvertBalance};
 
 /// Used for castor.network modules
 mod non_transfer_asset;
@@ -291,6 +291,8 @@ impl activity::Trait for Runtime {
 	type ChargingToEnergy = ChargingToEnergy;
 	type EnergyToFee = EnergyToFee;
 	type EnergyToLocking = EnergyToLocking;
+	type EnergyToActionPoint = EnergyToActionPoint;
+	type ActionPointToReputation = ConvertBalance;
 }
 
 parameter_types! {
