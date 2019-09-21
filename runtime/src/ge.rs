@@ -82,9 +82,9 @@ decl_module! {
     fn deposit_event() = default;
     
     // create ge with rules
-    pub fn create(origin, content_hash: T::ContentHash) -> Result {
+    pub fn create(origin, content_hash: T::ContentHash, amount: BalanceOf<T>) -> Result {
       let who = ensure_signed(origin)?;
-      Self::do_create(who.clone(), content_hash)
+      Self::do_create(who.clone(), content_hash, amount)
     }
 
     // stake ge
@@ -155,7 +155,7 @@ impl<T: Trait> Module<T> {
     (invested != <BalanceOf<T>>::from(0)) || (staked != <BalanceOf<T>>::from(0))
   }
 
-  pub fn do_create(who: T::AccountId, content_hash: T::ContentHash) -> Result {
+  pub fn do_create(who: T::AccountId, content_hash: T::ContentHash, balance: BalanceOf<T>) -> Result {
     let count = Self::governance_entities_count();
       
     // get new ge_id
@@ -163,9 +163,9 @@ impl<T: Trait> Module<T> {
     let new_count = count.checked_add(&one).ok_or("exceed maximum amount of ge")?;
 
     // do something with balance here e.g. lock balance, reduce balance
-    let balance: u128 = 12;
-    let temp: Option<BalanceOf<T>> = balance.try_into().ok();
-    let balance = temp.ok_or("Cannot convert to balance")?;
+    // let balance: u128 = 12;
+    // let temp: Option<BalanceOf<T>> = balance.try_into().ok();
+    // let balance = temp.ok_or("Cannot convert to balance")?;
     // reserve some balance
     ensure!(balance >= T::GeCreationFee::get(), "deposit should more than Ge creation fee.");
     ensure!(T::Currency::can_reserve(&who, balance), "Balance not enough for creating new GE.");
@@ -179,6 +179,8 @@ impl<T: Trait> Module<T> {
       content_hash: content_hash,
     };
 
+    <InvestedAmount<T>>::insert((new_count, who.clone()), balance);
+    <TotalInvestedAmount<T>>::insert(new_count, balance);
     <GovernanceEntities<T>>::insert(new_count, new_governance_entity);
     <GovernanceEntitiesCount<T>>::put(new_count);
 
