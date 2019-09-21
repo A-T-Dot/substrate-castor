@@ -22,7 +22,7 @@ A new SRML-based Substrate node, ready for hacking.
 ### Custom Types
 ```
 {
-  "ContentHash": "Hash",
+  "ContentHash": "[u8; 32]",
   "NodeType": "u32",
   "Node": {
     "id": "ContentHash",
@@ -36,8 +36,7 @@ A new SRML-based Substrate node, ready for hacking.
     "threshold": "u64",
     "min_deposit": "Balance",
     "apply_stage_len": "Moment",
-    "commit_stage_len": "Moment",
-    "content_hash": "ContentHash"
+    "commit_stage_len": "Moment"
   },
   "Challenge": {
     "amount": "Balance",
@@ -48,7 +47,6 @@ A new SRML-based Substrate node, ready for hacking.
     "owner": "AccountId"
   },
   "ChallengeId": "u64",
-  "ListingId": "u64",
   "Listing": {
     "id": "ListingId",
     "node_id": "ContentHash",
@@ -58,22 +56,48 @@ A new SRML-based Substrate node, ready for hacking.
     "challenge_id": "ChallengeId",
     "owner": "AccountId"
   },
+  "ListingId": "u64",
   "Poll": {
     "votes_for": "Balance",
     "votes_against": "Balance",
     "passed": "bool"
   },
   "Tcx": {
-    "tcx_type": "u64",
-    "content_hash": "ContentHash"
+    "tcx_type": "u64"
   },
   "TcxType": "u64",
   "Link": {
     "source": "u32",
     "target": "u32"
   },
+  "Like": {
+    "from": "AccountId",
+    "to": "ContentHash"
+  },
+  "Admire": {
+    "from": "AccountId",
+    "to": "ContentHash"
+  },
+  "Grant": {
+    "from": "AccountId",
+    "to": "ContentHash",
+    "amount": "Balance"
+  },
+  "Report": {
+    "from": "AccountId",
+    "target": "ContentHash",
+    "reason": "ContentHash"
+  },
   "VecContentHash": "Vec<ContentHash>",
-  "Quota": "Balance"
+  "ReasonHash": "ContentHash",
+  "AdmireId": "u64",
+  "GrantId": "u64",
+  "LikeId": "u64",
+  "ReportId": "u64",
+  "Quota": "u64",
+  "ActionPoint": "Balance",
+  "Energy": "Balance",
+  "Reputation": "Balance"
 }
 ```
 
