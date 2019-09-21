@@ -291,6 +291,10 @@ impl activity::Trait for Runtime {
 	type ChargingToEnergy = ChargingToEnergy;
 }
 
+parameter_types! {
+	pub const GeCreationFee: u128 = 1_000_000;
+}
+
 impl ge::Trait for Runtime {
 	type Currency = Balances;
 	type Event = Event;
@@ -298,6 +302,7 @@ impl ge::Trait for Runtime {
 	type ContentHash = ContentHash;
 	type Slash = (); // send the slashed funds to where?.
 	type Reward = (); // rewards are minted from the void
+	type GeCreationFee = GeCreationFee; // minimum deposit for creating GE
 }
 
 impl tcx::Trait for Runtime {

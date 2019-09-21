@@ -6,12 +6,12 @@ use support::{
   decl_module, decl_storage, decl_event, ensure, dispatch::Result,
   traits::{
     Currency, ReservableCurrency,
-    OnUnbalanced, // WithdrawReasons, 
+    OnUnbalanced, Get, // WithdrawReasons, 
   },
   StorageValue, StorageMap, Parameter,
 };
 use sr_primitives::traits::{
-  Member, SimpleArithmetic, Bounded, CheckedAdd
+  Member, SimpleArithmetic, Bounded, CheckedAdd, CheckedSub,
 };
 use system::ensure_signed;
 
@@ -33,6 +33,8 @@ pub trait Trait: system::Trait + timestamp::Trait {
 
 	/// Handler for the unbalanced increment when rewarding a staker.
 	type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
+  /// Cost of new GE creation.
+  type GeCreationFee: Get<BalanceOf<Self>>;
 }
 
 // Balance zone
@@ -82,31 +84,7 @@ decl_module! {
     // create ge with rules
     pub fn create(origin, content_hash: T::ContentHash) -> Result {
       let who = ensure_signed(origin)?;
-      let count = Self::governance_entities_count();
-      
-      // get new ge_id
-      let one = T::GeId::from(1 as u32);
-      let new_count = count.checked_add(&one).ok_or("exceed maximum amount of ge")?;
-
-      // TODO: do something with balance here e.g. lock balance, reduce balance
-      let balance: u128 = 12;
-      let temp: Option<BalanceOf<T>> = balance.try_into().ok();
-      let balance = temp.ok_or("Cannot convert to balance")?;
-
-      let new_governance_entity = GovernanceEntity::<BalanceOf<T>, T::Moment, T::ContentHash> {
-        threshold: 0,
-        min_deposit: BalanceOf::<T>::from(3000),
-        apply_stage_len: T::Moment::from(60000),
-        commit_stage_len: T::Moment::from(60000),
-        content_hash: content_hash,
-      };
-
-      <GovernanceEntities<T>>::insert(new_count, new_governance_entity);
-      <GovernanceEntitiesCount<T>>::put(new_count);
-
-      Self::deposit_event(RawEvent::Created(who, new_count, balance, content_hash));
-
-      Ok(())
+      Self::do_create(who.clone(), content_hash)
     }
 
     // stake ge
@@ -114,7 +92,7 @@ decl_module! {
       let who = ensure_signed(origin)?;
       ensure!(<GovernanceEntities<T>>::exists(id), "GE does not exist");
       
-      // TODO: actually stake real balance, below simulates
+      // actually stake real balance, below simulates
       // const STAKING_ID: [u8; 8] = *b"staking ";
       // T::Currency::set_lock(
       //   STAKING_ID,
@@ -123,56 +101,27 @@ decl_module! {
       //   T::BlockNumber::max_value(),
       //   WithdrawReasons::all(),
       // );
-      // check if enough balance
-
-      // check if overflow
-      let staked_amount = Self::staked_amount((id, who.clone()));
-      let total_staked_amount = Self::total_staked_amount(id);
-      let new_staked_amount = staked_amount.checked_add(&amount).ok_or("Overflow stake amount")?;
-      let new_total_staked_amount = total_staked_amount.checked_add(&amount).ok_or("Overflow total stake amount")?;
-
-      <StakedAmount<T>>::insert((id, who.clone()), new_staked_amount);
-      <TotalStakedAmount<T>>::insert(id, new_total_staked_amount);
-
-
-      Self::deposit_event(RawEvent::Staked(who, id, amount));
-
-      Ok(())
+      Self::do_stake(who.clone(), id, amount)
     }
 
     pub fn withdraw(origin, id: T::GeId, amount: BalanceOf<T>) -> Result {
-      // TODO: withdraw balance
+      // withdraw balance
       let who = ensure_signed(origin)?;
       ensure!(<GovernanceEntities<T>>::exists(id), "GE does not exist");
-      // TODO: actually stake real balance, below simulates
+      // actually stake real balance, below simulates
       // const STAKING_ID: [u8; 8] = *b"staking ";
       // T::Currency::remove_lock(
       //   STAKING_ID,
       //   &who,
       // );
-
-      Ok(())
+      Self::do_withdraw(who.clone(), id, amount)
     }
 
 
     pub fn invest(origin, id: T::GeId, amount: BalanceOf<T>) -> Result {
       let who = ensure_signed(origin)?;
       ensure!(<GovernanceEntities<T>>::exists(id), "GE does not exist");
-      // TODO: invest, check if enough balance
-
-      // check if overflow
-      let invested_amount = Self::invested_amount((id, who.clone()));
-      let total_invested_amount = Self::total_invested_amount(id);
-      let new_invested_amount = invested_amount.checked_add(&amount).ok_or("Overflow stake amount")?;
-      let new_total_invested_amount = total_invested_amount.checked_add(&amount).ok_or("Overflow total stake amount")?;
-
-      <InvestedAmount<T>>::insert((id, who.clone()), new_invested_amount);
-      <TotalInvestedAmount<T>>::insert(id, new_total_invested_amount);
-
-      <InvestedAmount<T>>::insert((id, who.clone()), amount);
-      Self::deposit_event(RawEvent::Invested(who, id, amount));
-      
-      Ok(())
+      Self::do_invest(who.clone(), id, amount)
     }
 
     pub fn update_rules(origin) -> Result {
@@ -192,7 +141,10 @@ decl_event!(
   {
     Created(AccountId, GeId, Balance, ContentHash),
     Staked(AccountId, GeId, Balance),
-    Invested(AccountId,GeId, Balance),
+    Invested(AccountId, GeId, Balance),
+    // FIXME: uncomment when front-end is ready
+    // (Who, GeId, Amount, Remained)
+    // Withdrawed(AccountId, GeId, Balance, Balance),
   }
 );
 
@@ -201,5 +153,102 @@ impl<T: Trait> Module<T> {
     let invested = Self::invested_amount((ge_id, who.clone()));
     let staked = Self::staked_amount((ge_id, who.clone()));
     (invested != <BalanceOf<T>>::from(0)) || (staked != <BalanceOf<T>>::from(0))
+  }
+
+  pub fn do_create(who: T::AccountId, content_hash: T::ContentHash) -> Result {
+    let count = Self::governance_entities_count();
+      
+    // get new ge_id
+    let one = T::GeId::from(1 as u32);
+    let new_count = count.checked_add(&one).ok_or("exceed maximum amount of ge")?;
+
+    // do something with balance here e.g. lock balance, reduce balance
+    let balance: u128 = 12;
+    let temp: Option<BalanceOf<T>> = balance.try_into().ok();
+    let balance = temp.ok_or("Cannot convert to balance")?;
+    // reserve some balance
+    ensure!(balance >= T::GeCreationFee::get(), "deposit should more than Ge creation fee.");
+    ensure!(T::Currency::can_reserve(&who, balance), "Balance not enough for creating new GE.");
+    T::Currency::reserve(&who, balance)?;
+
+    let new_governance_entity = GovernanceEntity::<BalanceOf<T>, T::Moment, T::ContentHash> {
+      threshold: 0,
+      min_deposit: BalanceOf::<T>::from(3000),
+      apply_stage_len: T::Moment::from(60000),
+      commit_stage_len: T::Moment::from(60000),
+      content_hash: content_hash,
+    };
+
+    <GovernanceEntities<T>>::insert(new_count, new_governance_entity);
+    <GovernanceEntitiesCount<T>>::put(new_count);
+
+    Self::deposit_event(RawEvent::Created(who, new_count, balance, content_hash));
+
+    Ok(())
+  }
+
+  pub fn do_stake(who: T::AccountId, id: T::GeId, amount: BalanceOf<T>) -> Result {
+    // check if enough balance
+    ensure!(T::Currency::can_reserve(&who, amount), "Balance not enough.");
+    // check if overflow
+    let staked_amount = Self::staked_amount((id, who.clone()));
+    let total_staked_amount = Self::total_staked_amount(id);
+    let new_staked_amount = staked_amount.checked_add(&amount).ok_or("Overflow stake amount")?;
+    let new_total_staked_amount = total_staked_amount.checked_add(&amount).ok_or("Overflow total stake amount")?;
+    // actual stake
+    T::Currency::reserve(&who, amount)?;
+
+    <StakedAmount<T>>::insert((id, who.clone()), new_staked_amount);
+    <TotalStakedAmount<T>>::insert(id, new_total_staked_amount);
+
+    Self::deposit_event(RawEvent::Staked(who, id, amount));
+
+    Ok(())
+  }
+
+  pub fn do_withdraw(who: T::AccountId, id: T::GeId, amount: BalanceOf<T>) -> Result {
+    // check if reserved balance is enough
+    // staked_amount is the balance staked(reserved) to this GeId
+    let staked_amount = Self::staked_amount((id, who.clone()));
+    ensure!(staked_amount >= amount, "Can not withdraw more than you have staked.");
+    // balance_reserved is the total reserved balance of this account,
+    // it consists of staked and invested balance not only to this GeId,
+    // but to other GeIds as well
+    let balance_reserved = T::Currency::reserved_balance(&who);
+    ensure!(balance_reserved >= staked_amount, "Total reserved balance should more than staked balance.");
+    // deduct staked amount in Ge
+    let new_staked_amount = staked_amount.checked_sub(&amount).ok_or("Underflow staked amount.")?;
+    let total_staked_amount = Self::total_staked_amount(id);
+    let new_total_staked_amount = total_staked_amount.checked_sub(&amount).ok_or("Underflow total staked amount.")?;
+    // actual unreserve balance
+    T::Currency::unreserve(&who, amount);
+
+    <StakedAmount<T>>::insert((id, who.clone()), new_staked_amount);
+    <TotalStakedAmount<T>>::insert(id, new_total_staked_amount);
+    // FIXME: uncomment when front-end is ready
+    // let remained_amount = staked_amount - amount;
+    // Self::deposit_event(RawEvent::Withdrawed(who, id, amount, remained_amount));
+
+    Ok(())
+  }
+
+  pub fn do_invest(who: T::AccountId, id: T::GeId, amount: BalanceOf<T>) -> Result {
+    // invest, check if enough balance
+    ensure!(T::Currency::can_reserve(&who, amount), "Balance not enough.");
+    // check if overflow
+    let invested_amount = Self::invested_amount((id, who.clone()));
+    let total_invested_amount = Self::total_invested_amount(id);
+    let new_invested_amount = invested_amount.checked_add(&amount).ok_or("Overflow stake amount")?;
+    let new_total_invested_amount = total_invested_amount.checked_add(&amount).ok_or("Overflow total stake amount")?;
+
+    // actual invest
+    T::Currency::reserve(&who, amount)?;
+
+    <InvestedAmount<T>>::insert((id, who.clone()), new_invested_amount);
+    <TotalInvestedAmount<T>>::insert(id, new_total_invested_amount);
+
+    Self::deposit_event(RawEvent::Invested(who, id, amount));
+    
+    Ok(())
   }
 }
