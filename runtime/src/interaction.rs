@@ -238,9 +238,9 @@ impl<T: Trait> Module<T> {
     <NodeGrantedBalance<T>>::insert(to, new_node_granted_balance);
     <GrantedNode<T>>::insert((sender.clone(), to), new_grant_id);
     // TODO: transfer CCT to node owner
-    // let free_balance = T::Currency::free_balance(sender.clone());
-    // ensure!(amount >= free_balance, "Currency not enough for Grant.");
-    // T::Currency::transfer(&sender, &node_owner, amount)?;
+    let free_balance = T::Currency::free_balance(&sender);
+    ensure!(amount >= free_balance, "Currency not enough for Grant.");
+    T::Currency::transfer(&sender, &node_owner, amount)?;
 
     Self::deposit_event(RawEvent::Granted(to, sender, node_owner, amount, new_grant_id, new_node_granted_balance));
     Ok(())
