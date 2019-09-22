@@ -1,5 +1,6 @@
 use primitives::{Pair, Public};
 use castor_runtime::{
+	NonTransferAssetsConfig,
 	AccountId, BabeConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, 
 };
@@ -121,6 +122,13 @@ fn testnet_genesis(initial_authorities: Vec<(AccountId, AccountId, GrandpaId, Ba
 		balances: Some(BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
 			vesting: vec![],
+		}),
+		non_transfer_asset: Some(NonTransferAssetsConfig {
+			assets: vec![0, 1, 2],
+			next_asset_id: 3,
+			energy_asset_id: 0,
+			acitvity_asset_id: 1,
+			reputation_asset_id: 2,
 		}),
 		sudo: Some(SudoConfig {
 			key: root_key,

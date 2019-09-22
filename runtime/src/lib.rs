@@ -1,4 +1,4 @@
-//! The Substrate Node Template runtime. This can be compiled with `#[no_std]`, ready for Wasm.
+//! The Castor Node runtime. This can be compiled with `#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
@@ -61,9 +61,17 @@ pub type Hash = primitives::H256;
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
 
-/// Used for the module template in `./template.rs`
-mod template;
-mod token;
+/// Implementations of some helper traits passed into runtime modules as associated types.
+pub mod impls;
+use impls::{FeeToEnergy, EnergyToFee, ChargingToEnergy, EnergyToLocking, EnergyToActionPoint, ConvertBalance};
+
+/// Used for castor.network modules
+mod non_transfer_asset;
+mod activity;
+mod tcx;
+mod ge;
+mod node;
+mod interaction;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -117,7 +125,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 /// `SLOT_DURATION` instead (like the timestamp module for calculating the
 /// minimum period).
 /// <https://research.web3.foundation/en/latest/polkadot/BABE/Babe/#6-practical-results>
-pub const MILLISECS_PER_BLOCK: u64 = 6000;
+pub const MILLISECS_PER_BLOCK: u64 = 10000;
 
 pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
 
@@ -209,7 +217,7 @@ impl indices::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const MinimumPeriod: u64 = 5000;
+	pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
 }
 
 impl timestamp::Trait for Runtime {
@@ -220,20 +228,20 @@ impl timestamp::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 500;
-	pub const TransferFee: u128 = 0;
-	pub const CreationFee: u128 = 0;
-	pub const TransactionBaseFee: u128 = 0;
-	pub const TransactionByteFee: u128 = 1;
+	pub const ExistentialDeposit: u128 = 10_000;
+	pub const TransferFee: u128 = 10_000;
+	pub const CreationFee: u128 = 10_000;
+	pub const TransactionBaseFee: u128 = 1_000;
+	pub const TransactionByteFee: u128 = 10;
 }
 
 impl balances::Trait for Runtime {
 	/// The type for recording an account's balance.
 	type Balance = Balance;
 	/// What to do if an account's free balance gets zeroed.
-	type OnFreeBalanceZero = ();
+	type OnFreeBalanceZero = (Activities);
 	/// What to do if a new account is created.
-	type OnNewAccount = Indices;
+	type OnNewAccount = (Indices, Activities);
 	/// The ubiquitous event type.
 	type Event = Event;
 	type TransactionPayment = ();
@@ -252,9 +260,83 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-/// Used for the module template in `./template.rs`
-impl template::Trait for Runtime {
+// Used for castor.network
+
+type AssetId = u32;
+type TcxType = u64;
+type ContentHash = [u8; 32];
+
+impl non_transfer_asset::Trait for Runtime {
+	type Balance = Balance;
+	type AssetId = AssetId;
 	type Event = Event;
+}
+
+parameter_types! {
+	pub const EnergyBaseAmount: u128 = 1_000_000;
+}
+
+impl activity::Trait for Runtime {
+	type Currency = Balances;
+	type EnergyCurrency = non_transfer_asset::EnergyAssetCurrency<Runtime>;
+	type ActivityCurrency = non_transfer_asset::ActivityAssetCurrency<Runtime>;
+	type ReputationCurrency = non_transfer_asset::ReputationAssetCurrency<Runtime>;
+	type TransactionPayment = ();
+	type Event = Event;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
+	type EnergyBaseAmount = EnergyBaseAmount;
+	type WeightToFee = ConvertInto;
+	type FeeToEnergy = FeeToEnergy;
+	type ChargingToEnergy = ChargingToEnergy;
+	type EnergyToFee = EnergyToFee;
+	type EnergyToLocking = EnergyToLocking;
+	type EnergyToActionPoint = EnergyToActionPoint;
+	type ActionPointToReputation = ConvertBalance;
+}
+
+parameter_types! {
+	pub const GeCreationFee: u128 = 1_000_000;
+}
+
+impl ge::Trait for Runtime {
+	type Currency = Balances;
+	type Event = Event;
+	type GeId = u64;
+	type ContentHash = ContentHash;
+	type Slash = (); // send the slashed funds to where?.
+	type Reward = (); // rewards are minted from the void
+	type GeCreationFee = GeCreationFee; // minimum deposit for creating GE
+}
+
+impl tcx::Trait for Runtime {
+	type Currency = Balances;
+	type Event = Event;
+	type TcxId = u64;
+	type TcxType = TcxType;
+	type ActionId = u64;
+	type ListingId = u64;
+	type ChallengeId = u64;
+	type ConvertBalance = ConvertBalance;
+}
+
+impl node::Trait for Runtime {
+	type Event = Event;
+	type ContentHash = ContentHash;
+	type NodeType = u32;
+}
+
+impl interaction::Trait for Runtime {
+	type Event = Event;
+	type LikeId = u64;
+  type AdmireId = u64;
+  type GrantId = u64;
+  type ReportId = u64;
+  /// Currency type for this module.
+	type Currency = Balances;
+	// type EnergyCurrency = non_transfer_asset::EnergyAssetCurrency<Runtime>;
+	type ActivityCurrency = non_transfer_asset::ActivityAssetCurrency<Runtime>;
+	type ReputationCurrency = non_transfer_asset::ReputationAssetCurrency<Runtime>;
 }
 
 construct_runtime!(
@@ -270,8 +352,13 @@ construct_runtime!(
 		Indices: indices::{default, Config<T>},
 		Balances: balances::{default, Error},
 		Sudo: sudo,
-		// Used for the module template in `./template.rs`
-		TemplateModule: template::{Module, Call, Storage, Event<T>},
+		// Used for castor.network
+		NonTransferAssets: non_transfer_asset::{Module, Call, Storage, Event<T>, Config<T>},
+		Activities: activity::{Module, Call, Storage, Event<T>},
+		Tcx: tcx::{Module, Call, Storage, Event<T>},
+		Ge: ge::{Module, Call, Storage, Event<T>},
+		Node: node::{Module, Call, Storage, Event<T>},
+		Interaction: interaction::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -292,7 +379,7 @@ pub type SignedExtra = (
 	system::CheckEra<Runtime>,
 	system::CheckNonce<Runtime>,
 	system::CheckWeight<Runtime>,
-	balances::TakeFees<Runtime>
+	activity::TakeFees<Runtime>
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;

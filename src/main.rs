@@ -1,4 +1,4 @@
-//! Substrate Node Template CLI library.
+//! The Castor Node CLI library.
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]

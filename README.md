@@ -2,6 +2,106 @@
 
 A new SRML-based Substrate node, ready for hacking.
 
+## TODO
+---
+### anakornk
+- [x] Node Creation and Ownership Transfer
+- [x] Simulate GE creation, stake and invest
+- [x] Multi-TCX per GE, Simulates TCX 5 steps
+- [x] Add sourcing features for nodes
+
+### lignyxg
+- [ ] Compute Voting Power
+- [ ] Link with GE
+
+#### optional
+- [ ] GE Withdraw
+- [ ] add security/conditional checks (esp. TCX)
+---
+
+### Custom Types
+```
+{
+  "ContentHash": "[u8; 32]",
+  "NodeType": "u32",
+  "Node": {
+    "id": "ContentHash",
+    "node_type": "NodeType",
+    "sources": "Vec<ContentHash>"
+  },
+  "GeId": "u64",
+  "ActionId": "u64",
+  "TcxId": "u64",
+  "GovernanceEntity": {
+    "threshold": "u64",
+    "min_deposit": "Balance",
+    "apply_stage_len": "Moment",
+    "commit_stage_len": "Moment"
+  },
+  "Challenge": {
+    "amount": "Balance",
+    "voting_ends": "Moment",
+    "resolved": "bool",
+    "reward_pool": "Balance",
+    "total_tokens": "Balance",
+    "owner": "AccountId"
+  },
+  "ChallengeId": "u64",
+  "Listing": {
+    "id": "ListingId",
+    "node_id": "ContentHash",
+    "amount": "Balance",
+    "application_expiry": "Moment",
+    "whitelisted": "bool",
+    "challenge_id": "ChallengeId",
+    "owner": "AccountId"
+  },
+  "ListingId": "u64",
+  "Poll": {
+    "votes_for": "Balance",
+    "votes_against": "Balance",
+    "passed": "bool"
+  },
+  "Tcx": {
+    "tcx_type": "u64"
+  },
+  "TcxType": "u64",
+  "Link": {
+    "source": "u32",
+    "target": "u32"
+  },
+  "Like": {
+    "from": "AccountId",
+    "to": "ContentHash"
+  },
+  "Admire": {
+    "from": "AccountId",
+    "to": "ContentHash"
+  },
+  "Grant": {
+    "from": "AccountId",
+    "to": "ContentHash",
+    "amount": "Balance"
+  },
+  "Report": {
+    "from": "AccountId",
+    "target": "ContentHash",
+    "reason": "ContentHash"
+  },
+  "VecContentHash": "Vec<ContentHash>",
+  "ReasonHash": "ContentHash",
+  "AdmireId": "u64",
+  "GrantId": "u64",
+  "LikeId": "u64",
+  "ReportId": "u64",
+  "Quota": "u64",
+  "ActionPoint": "Balance",
+  "Energy": "Balance",
+  "Reputation": "Balance"
+}
+```
+
+
 ## Build
 
 Install Rust:
