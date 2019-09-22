@@ -137,8 +137,8 @@ decl_module! {
       // TODO: deduction balace for application
       // <token::Module<T>>::lock(sender.clone(), deposit, hashed.clone())?;
       // ensure!(<T as self::Trait>::Currency::can_reserve(&who, amount), "not enough balances to propose");
-      <T as self::Trait>::Currency::reserve(&who, amount)
-        .map_err(|_| "proposer's balance too low")?;
+      // <T as self::Trait>::Currency::reserve(&who, amount)
+      //   .map_err(|_| "proposer's balance too low")?;
         
       // more than min deposit
       let min_deposit = T::ConvertBalance::convert(governance_entity.min_deposit);
@@ -178,7 +178,7 @@ decl_module! {
       <TcxListingsCount<T>>::insert(tcx_id, new_listing_count);
       <TcxListingsIndexHash<T>>::insert((tcx_id, new_listing_count), node_id);
 
-      Self::deposit_event(RawEvent::Proposed(who, tcx_id, node_id, amount, quota, action_id, app_exp));
+      Self::deposit_event(RawEvent::Proposed(who, tcx_id, node_id, app_exp));
 
       Ok(())
     }
@@ -464,14 +464,13 @@ decl_event!(
     ContentHash = <T as ge::Trait>::ContentHash,
     TcxId = <T as Trait>::TcxId,
     TcxType = <T as Trait>::TcxType,
-    ActionId = <T as Trait>::ActionId,
     ChallengeId = <T as Trait>::ChallengeId,
     GeId = <T as ge::Trait>::GeId,
     Quota = BalanceOf<T>,
     Moment = <T as timestamp::Trait>::Moment
   {
     /// (AccountId, TcxId, ContentHash, Balance, Quota, ActionId)
-    Proposed(AccountId, TcxId, ContentHash, Balance, Quota, ActionId, Moment),
+    Proposed(AccountId, TcxId, ContentHash, Moment),
     /// (AccountId, TcxId, ContentHash, Balance, Quota)
     Challenged(AccountId, ChallengeId, TcxId, ContentHash, Balance, Quota, Moment),
     /// (AccountId, ChallengeId, Balance, Quota, passed)
@@ -520,7 +519,12 @@ impl<T: Trait> Module<T> {
     let factor = BalanceOf::<T>::from(20);
     let quota = min.checked_mul(&factor).ok_or("Overflow calculating A shares.")?;
     let staked = T::ConvertBalance::convert(<ge::Module<T>>::staked_amount((ge_id, who.clone())));
-    let max = cmp::max(BalanceOf::<T>::from(0), amount-invested);
+    // let max = cmp::max(BalanceOf::<T>::from(0), amount-invested);
+    let max = if amount > invested {
+      amount - invested
+    } else {
+      BalanceOf::<T>::from(0)
+    };
     let max = cmp::max(max, staked);
     let quota = quota.checked_add(&max).ok_or("Overflow calculating B shares.")?;
     Ok(quota)
