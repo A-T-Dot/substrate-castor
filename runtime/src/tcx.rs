@@ -137,8 +137,8 @@ decl_module! {
       // TODO: deduction balace for application
       // <token::Module<T>>::lock(sender.clone(), deposit, hashed.clone())?;
       // ensure!(<T as self::Trait>::Currency::can_reserve(&who, amount), "not enough balances to propose");
-      // <T as self::Trait>::Currency::reserve(&who, amount)
-      //   .map_err(|_| "proposer's balance too low")?;
+      <T as self::Trait>::Currency::reserve(&who, amount)
+        .map_err(|_| "proposer's balance too low")?;
         
       // more than min deposit
       let min_deposit = T::ConvertBalance::convert(governance_entity.min_deposit);
@@ -251,7 +251,7 @@ decl_module! {
 
       <ChallengeNonce<T>>::put(new_challenge_nonce);
 
-      Self::deposit_event(RawEvent::Challenged(who, new_challenge_nonce, tcx_id, node_id, amount, quota, voting_exp));
+      Self::deposit_event(RawEvent::Challenged(who, new_challenge_nonce, tcx_id, node_id, voting_exp));
 
       Ok(())
     }
@@ -323,7 +323,7 @@ decl_module! {
 
       <Votes<T>>::insert((challenge_id, who.clone()), vote_instance);
 
-      Self::deposit_event(RawEvent::Voted(who, challenge_id, amount, quota, value));
+      Self::deposit_event(RawEvent::Voted(who, challenge_id, value));
       Ok(())
     }
 
@@ -460,21 +460,21 @@ decl_event!(
   pub enum Event<T> 
   where 
     AccountId = <T as system::Trait>::AccountId,
-    Balance = BalanceOf<T>,
+    // Balance = BalanceOf<T>,
     ContentHash = <T as ge::Trait>::ContentHash,
     TcxId = <T as Trait>::TcxId,
     TcxType = <T as Trait>::TcxType,
     ChallengeId = <T as Trait>::ChallengeId,
     GeId = <T as ge::Trait>::GeId,
-    Quota = BalanceOf<T>,
+    // Quota = BalanceOf<T>,
     Moment = <T as timestamp::Trait>::Moment
   {
     /// (AccountId, TcxId, ContentHash, Balance, Quota, ActionId)
     Proposed(AccountId, TcxId, ContentHash, Moment),
     /// (AccountId, TcxId, ContentHash, Balance, Quota)
-    Challenged(AccountId, ChallengeId, TcxId, ContentHash, Balance, Quota, Moment),
+    Challenged(AccountId, ChallengeId, TcxId, ContentHash, Moment),
     /// (AccountId, ChallengeId, Balance, Quota, passed)
-    Voted(AccountId, ChallengeId, Balance, Quota, bool),
+    Voted(AccountId, ChallengeId, bool),
     Resolved(ChallengeId),
     Accepted(TcxId, ContentHash),
     Rejected(TcxId, ContentHash),
